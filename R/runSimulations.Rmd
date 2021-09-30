@@ -1,6 +1,8 @@
 ---
 title: ""
-output: html_document
+author: "Me"
+data: "`r format(Sys.time(), '%d %B, %Y, %H:%M')`"
+
 ---
 
 ```{r setup, include=FALSE}
@@ -9,15 +11,15 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Background
 
-9/16/21 update: Bob changed a few things from previous run since there were some errors. 
+This run uses ARI values derived from parameter sweeps meant to preserve the relationship of prevalence being twice incidence. Here we assume that 80% of the population is in the low risk category regardless of prevalence.
 
-In this document we run scenarios and show results from these runs. This work reads in two functions which initialize and high and low risk population. The low risk population is subject to a lower risk of infection initially. The high risk population has a higher ARI. The overall ARI is determined based on the TB prevalence and the work of Dodd et al. We calculate the number of infections these individuals have by age group and TB prevalence.
+This work reads in two functions which initialize and high and low risk population. The low risk population is subject to a lower risk of infection initially. The high risk population has a higher ARI. We calculate the number of infections these individuals have by age group and TB prevalence.
 
 The second step is to generate new infections over a one year time period and then deterministically creates active cases of disease using prespecified progression rates that are a function of the number of infections an individual has.
 
 ```{r, echo = FALSE, include=FALSE}
-setwd("G:/My Drive/Work/TB Projects/ReMoTe/Code")
-source("Functions v3.R")
+setwd("G:/My Drive/Work/TB Projects/ReMoTe")
+source("./R/utils.R")
 library(ggplot2)
 library(reshape)
 library(reshape2)
@@ -39,9 +41,9 @@ We consider a set of prevalence values and associated ARI. We consider two scena
 Following are these parameter assumptions:
 
 ```{r, echo = FALSE}
-pars.mix <- read.xlsx("./ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "Mixing and Ackley")
+pars.mix <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Code/ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "Mixing and Ackley")
 
-pars.nomix <- read.xlsx("./ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "No Mixing, Ackley")
+pars.nomix <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Code/ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "No Mixing, Ackley")
 
 ari.overall.mix <- round(pars.mix[1:10,2]*pars.mix[1:10,4]+pars.mix[1:10,3]*pars.mix[1:10,5],2)
 
@@ -178,6 +180,8 @@ for(i in 1:10){
   age.prev.LTBI.nomix[,i] <- round(num.infect.age/pop.age,2)
 
 }
+
+max.inf <- max(max(num.inf.age.nomix$total.infections),max(num.inf.age.mix$total.infections))
 ```
 
 
@@ -189,11 +193,11 @@ colorCount <- num.age
 getPalette <- colorRampPalette(brewer.pal(9,"Paired"))
 
 ggplot(data=num.inf.age.nomix[num.inf.age.nomix$age.group==0,],aes(x=prevalence,y=total.infections))+
-  geom_bar(stat="identity")+ylim(0,605000)+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
   labs(title="Total number of infections",x="TB prevalence",y="Total number baseline infections")
 
 ggplot(data=num.inf.age.nomix[num.inf.age.nomix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
-  geom_bar(stat="identity")+ylim(0,605000)+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
   labs(title="Total number of infections by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
@@ -209,7 +213,7 @@ ggplot(data=num.inf.nomix,aes(x=prevalence,y=count,fill=num.inf))+
 To demonstrate that the mixing creates more individuals with a higher number of prior infections, we focus in on those with at least six prior infections in this plot.
 
 ```{r,echo=FALSE}
-# just plot those with at least  infections
+# just plot those with at least 6 infections
 ggplot(data=num.inf.nomix[num.inf.nomix$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
   labs(title="Distribution of the number of prior infections, at least 6 infections",x="TB prevalence",y="Total number of individuals")+
@@ -230,11 +234,11 @@ age.prev.LTBI.nomix %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400
 ```{r, echo=F}
 # plot the results for mixing group
 ggplot(data=num.inf.age.mix[num.inf.age.mix$age.group==0,],aes(x=prevalence,y=total.infections))+
-  geom_bar(stat="identity")+ylim(0,605000)+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
   labs(title="Total number of infections",x="TB prevalence",y="Total number baseline infections")
 
 ggplot(data=num.inf.age.mix[num.inf.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
-  geom_bar(stat="identity")+ylim(0,605000)+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
   labs(title="Total number of infections by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+

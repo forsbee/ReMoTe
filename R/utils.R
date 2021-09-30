@@ -292,7 +292,7 @@ TB.sim.nomix <- function(init.pop,TB.prog,ari,prog.old.inf=0.0013){
 ## FUNCTION 3: GENERATE SUMMARY STATS FROM SIMULATED DATA ##
 ############################################################
 sum.stats <- function(results.all,pars.tmp,mix=T){
-  # results.all is output from RB.sim
+  # results.all is output from TB.sim
   # pars is vector from standard par sheet: "TB.prevalence", "ARI.low.risk", "ARI.high.risk", "percent.low.risk",
   ##  "percent.high.risk", "progression.once.infected" "progression.2x" ..."progression.10x" 
   
@@ -365,7 +365,7 @@ sum.stats <- function(results.all,pars.tmp,mix=T){
                               "ATB, old","Total ATB","percent first inf","percent old inf")
   
   # True prevalence (=1.66*smear+ prevalence)
-  true.prev <- 1.66*pars.tmp$TB.prevalence
+  true.prev <- 1.66*pars.tmp[1]
     
   # Incidence
   incidence <- ATB.tot/10
@@ -411,7 +411,7 @@ sum.stats <- function(results.all,pars.tmp,mix=T){
     rownames(case.results) <- c("ATB, old","Total ATB","percent first inf","percent old inf")
     
     # True prevalence (=1.66*smear+ prevalence)
-    true.prev <- 1.66*pars.tmp$TB.prevalence
+    true.prev <- 1.66*pars.tmp[1]
     
     # Incidence
     incidence <- ATB.tot/10
@@ -433,3 +433,44 @@ sum.stats <- function(results.all,pars.tmp,mix=T){
     
   }
 }
+
+# function to run the overall simulation for input overall ari
+runSimulation <- function(ari.overall,low.prev=0.8,
+              TB.prog=c(0.04,0.02,0.01),
+              prog.old.inf=0.00075,
+              pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
+              median.age=c(2,7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87)){
+# TB.prog gives c(prog with one infect,prob with two, step increase after 2)
+  
+    # first calculate the ARI for high and low risk populations
+  ari.low.tmp <- ari.overall/(low.prev+(1-low.prev)*6)
+  ari.high.tmp <- 6*ari.low.tmp
+  
+  # initialize population
+  sim.popn <- init.popn.mix(ari.high=ari.high.tmp,
+                ari.low=ari.low.tmp,
+                low.prev=low.prev)
+  
+  # get TB progression rates
+  max.inf <- ncol(sim.popn$all.pop)-1
+  
+  TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+  TB.prog.sim[TB.prog.sim>0.13] <- 0.13
+  
+  # generate new cases of disease
+  new.cases <- TB.sim(init.pop=sim.popn,
+                      TB.prog=TB.prog.sim,
+                      ari.high=ari.high.tmp,
+                      ari.low=ari.low.tmp,
+                      prog.old.inf)
+  
+  # get incidence
+  ATB.tot <- sum(new.cases$cases.by.age)
+  incidence <- ATB.tot/10
+  
+  return(incidence)
+  
+}
+
+
+
