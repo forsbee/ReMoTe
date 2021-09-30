@@ -436,37 +436,58 @@ sum.stats <- function(results.all,pars.tmp,mix=T){
 
 # function to run the overall simulation for input overall ari
 runSimulation <- function(ari.overall,low.prev=0.8,
+                          mix=T,
               TB.prog=c(0.04,0.02,0.01),
               prog.old.inf=0.00075,
               pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
               median.age=c(2,7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87)){
 # TB.prog gives c(prog with one infect,prob with two, step increase after 2)
   
+  if(mix==T){
     # first calculate the ARI for high and low risk populations
-  ari.low.tmp <- ari.overall/(low.prev+(1-low.prev)*6)
-  ari.high.tmp <- 6*ari.low.tmp
+    ari.low.tmp <- ari.overall/(low.prev+(1-low.prev)*6)
+    ari.high.tmp <- 6*ari.low.tmp
   
-  # initialize population
-  sim.popn <- init.popn.mix(ari.high=ari.high.tmp,
+    # initialize population
+     sim.popn <- init.popn.mix(ari.high=ari.high.tmp,
                 ari.low=ari.low.tmp,
                 low.prev=low.prev)
   
-  # get TB progression rates
-  max.inf <- ncol(sim.popn$all.pop)-1
+    # get TB progression rates
+    max.inf <- ncol(sim.popn$all.pop)-1
   
-  TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
-  TB.prog.sim[TB.prog.sim>0.13] <- 0.13
+    TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+    TB.prog.sim[TB.prog.sim>1] <- 1
   
-  # generate new cases of disease
-  new.cases <- TB.sim(init.pop=sim.popn,
+    # generate new cases of disease
+    new.cases <- TB.sim(init.pop=sim.popn,
                       TB.prog=TB.prog.sim,
                       ari.high=ari.high.tmp,
                       ari.low=ari.low.tmp,
                       prog.old.inf)
   
-  # get incidence
-  ATB.tot <- sum(new.cases$cases.by.age)
-  incidence <- ATB.tot/10
+    # get incidence
+    ATB.tot <- sum(new.cases$cases.by.age)
+    incidence <- ATB.tot/10
+    }else if(mix==F){
+      # initialize population
+      sim.popn <- init.popn.nomix(ari=ari.overall)
+      
+      # get TB progression rates
+      max.inf <- ncol(sim.popn$all.pop)-1
+      
+      TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+      TB.prog.sim[TB.prog.sim>1] <- 1
+      
+      # generate new cases of disease
+      new.cases <- TB.sim.nomix(init.pop=sim.popn,
+                          TB.prog=TB.prog.sim,
+                          ari=ari.overall,
+                          prog.old.inf)
+      # get incidence
+      ATB.tot <- sum(new.cases$cases.by.age)
+      incidence <- ATB.tot/10
+    }
   
   return(incidence)
   
