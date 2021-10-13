@@ -60,7 +60,7 @@ init.popn.mix <- function (ari.high,ari.low,low.prev,
     
     pop.names <- c(0:max.inf)
     
-    # high risk population: multiple the number of individuals in age group a, by the p(x infections|a)
+    # high risk population: multiply the number of individuals in age group a, by the p(x infections|a)
     init.pop.hi <- as.data.frame(prob.infection.hi*high.risk.pop)
     init.pop.lo <- as.data.frame(prob.infection.lo*low.risk.pop)
     names(init.pop.hi) <- names(init.pop.lo) <- pop.names
@@ -159,7 +159,7 @@ init.popn.nomix <- function (ari,pop.age=c(99000, 99000,92000,83000,85000,90000,
 ##########################################################################
 ## FUNCTION 2: GENERATE NEW INFECTIONS AND DISEASE OVER ONE YEAR PERIOD ##
 ##########################################################################
-TB.sim <- function(init.pop,TB.prog,ari.high,ari.low,prog.old.inf=0.0013){
+TB.sim <- function(init.pop,TB.prog,ari.high,ari.low,prog.old.inf=0.00075){
   # init.pop is the output list from init.popn(); 
   #   all.pop is the combined matrix of high and low risk where col# gives number of infections and the row number is the age group
   # TB.prog is information on TB progression rates and is a vector where
@@ -229,7 +229,7 @@ TB.sim <- function(init.pop,TB.prog,ari.high,ari.low,prog.old.inf=0.0013){
   return(results.all)
 }
 
-TB.sim.nomix <- function(init.pop,TB.prog,ari,prog.old.inf=0.0013){
+TB.sim.nomix <- function(init.pop,TB.prog,ari,prog.old.inf=0.00075){
   # init.pop is the output list from init.popn(); 
   #   all.pop is the combined matrix of high and low risk where col# gives number of infections and the row number is the age group
   # TB.prog is information on TB progression rates and is a vector where

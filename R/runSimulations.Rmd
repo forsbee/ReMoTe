@@ -6,18 +6,10 @@ data: "`r format(Sys.time(), '%d %B, %Y, %H:%M')`"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
-## Background
-
-This run uses ARI values derived from parameter sweeps meant to preserve the relationship of prevalence being twice incidence. Here we assume that 80% of the population is in the low risk category regardless of prevalence.
-
-This work reads in two functions which initialize and high and low risk population. The low risk population is subject to a lower risk of infection initially. The high risk population has a higher ARI. We calculate the number of infections these individuals have by age group and TB prevalence.
-
-The second step is to generate new infections over a one year time period and then deterministically creates active cases of disease using prespecified progression rates that are a function of the number of infections an individual has.
-
-```{r, echo = FALSE, include=FALSE}
+```{r, include=FALSE}
 setwd("G:/My Drive/Work/TB Projects/ReMoTe")
 source("./R/utils.R")
 library(ggplot2)
@@ -34,120 +26,180 @@ library(xlsx)
 library(kableExtra)
 ```
 
-## Simulation Scenarios
-We consider a set of prevalence values and associated ARI. We consider two scenarios about the population mixing: homogeneous mixing or a high and low risk exposure groups. 
+## Background
 
-### Mixing assumptions
+We initialize a population of size one million using the ARI, and age structure that mimics South Africa. We then generate new case of disease over a one year period and explore the role of reinfection in generating new cases of disease. We simulate populations with prevalence ranging from 100/100k to 1000/100k.
+
+We consider two scenarios: 
+
+1. Homogenous risk of TB infection in the population
+2. Hetergenous risk: 20% of the population has an ARI that is 6 times greater than the low risk population. 
+
+The ARI is challenging to estimate. We use two approaches:
+
+1. Dodd et al demonstrate a relationship between TB prevalence and the ARI. We leverage this to determine the overall ARI.
+2. We assume that the duration of disease is two years, as Styblo, and therefore prevalence must be twice incidence. In this case, we do parameter sweeps to determine the ARI that meets this condition for each prevalence scenario. 
+
+We also use the correction in these calculations that true prevalence should be 1.66 times reported to account for smear negative TB.
+
+We keep track of repeat infection events and, following Ackley et al and Reichler, we allow there to initially be a protective effect of reinfection, but that this gradually wanes with an increasing number of infections. Following is a depiction of this assumption:
+
+```{r}
+max.inf <- 100
+TB.prog=c(0.04,0.02,0.01)
+TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+TB.prog.sim[TB.prog.sim>1] <- 1
+
+plot.dat <- data.frame(num.infections=seq(1,max.inf+1),prog.rate=TB.prog.sim)
+
+ggplot(plot.dat,aes(x=num.infections,y=prog.rate))+
+  geom_line()+
+  labs(x="Number of infections",y="Probability of pregression to disease")
+
+```
+
+## Simulation scenarios
+We run the simulation with four total scenarios: two ARI scenarios and two mixing scenarios.
+
+ARI scenarios:
+
+-Dodd et al ARIs (based on TB prevalence)
+
+-ARIs derived assuming two year duration
+
+Mixing scenarios:
+
+-All population subject to the same risk of infection
+
+-20% of the population is in a high risk category with 6 times the risk of infection as the remaining 80% of the population.
+
 Following are these parameter assumptions:
 
 ```{r, echo = FALSE}
+# Dodd et al ARI, based on TB prevalence
 pars.mix <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Code/ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "Mixing and Ackley")
-
-pars.nomix <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Code/ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "No Mixing, Ackley")
-
+# get overall value
 ari.overall.mix <- round(pars.mix[1:10,2]*pars.mix[1:10,4]+pars.mix[1:10,3]*pars.mix[1:10,5],2)
 
-pars.print <- data.frame(cbind(pars.mix[1:10,1:3],ari.overall.mix,pars.mix[1:10,4:5],pars.nomix[1:10,c(2,4:5)]))
+pars.nomix <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Code/ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "No Mixing, Ackley")
+# 10/12/21: do not use this-just use overall ARI for mixing scenarios
 
-pars.print %>% kbl(col.names=c("prevalence","mixing ARI low risk","mixing ARI high risk","overall ARI",
-                               "prop. low risk","prop. high risk","no mix ARI","prop. low risk","prop. high risk")) %>% kable_styling()
+# par sweep parameters
+pars.sweep <- read.csv("G:/My Drive/Work/TB Projects/ReMoTe/Parameters/parSweepAll_2yr.csv")
+
+pars.print <- data.frame(cbind(pars.mix[1:10,1:3],ari.overall.mix,ari.overall.mix,
+                               pars.sweep[,c(8,9,7,5)]))
+
+pars.print %>% kbl(col.names=c("prevalence","Dodd: ARI low risk","Dodd: ARI high risk","Dodd: overall ARI, mixing","Dodd: no mix ARI",
+                               "Sweep: ARI low risk","Sweep: ARI high risk","Sweep: overall ARI, mixing","Sweep: no mix ARI")) %>% kable_styling()
 
 pop.age=c(99000, 99000,92000,83000,85000,90000, 91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000)
 median.age=c(2,7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87)
 prog.old.inf=0.00075
 ```
 
-### TB progression assumptions
-
-We consider two assumptions around TB progression. The first scenario assumes stable protection from prior infections such that the risk of progress for the first infection is 4% and subsequent reinfections only have a 1% risk of progression. The second scenario assumes that there is protection, but that it wanes with an increasing number of infections (Ackley assumption). 
-
-```{r, echo=F}
-prog.1 <- 0.04
-prog.2 <- 0.02
-prog.step <- 0.01
-max.inf <- 15
-
-TB.prog <- c(prog.1,seq(prog.2,prog.2+prog.step*(max.inf-1),prog.step))
-TB.prog[TB.prog>0.13] <- 0.13
-
-TB.prog2 <- c(prog.1,rep(prog.2,max.inf))
-
-plot.dat <- data.frame(num.infections=rep(seq(1,max.inf+1),2),assumption=rep(c("Ackley","protection"),each=max.inf+1),prog.rate=c(TB.prog,TB.prog2))
-
-ggplot(data=plot.dat,aes(x=num.infections,y=prog.rate,group=assumption))+
-  geom_line(aes(color=assumption))+
-  geom_point(aes(color=assumption,shape=assumption))+
-  labs(x="Number of infections",y="Probability of progression")
-
-```
-
-
 ## Initializing the population {.tabset}
 
-We first determine the number of infections that individuals have at the start of the simulation. We show this for the mixing and non-mixing populations first.
+We first determine the number of infections that individuals have at the start of the simulation. We show this for all four scenarios.
 
 ```{r, echo=F}
 # simulate the baseline population
-sim.dat.mix <- sim.dat.nomix <- list()
+sim.dodd.mix <- sim.dodd.nomix <- sim.sweep.mix <- sim.sweep.nomix <- list()
 for(i in 1:length(pars.mix[,1])){
   
   if(is.na(pars.mix[i,1]) || is.na(pars.nomix[i,1])){break}
   pars.tmp.mix <- pars.mix[i,]
-  sim.dat.mix[[i]] <- init.popn.mix(ari.high=pars.tmp.mix$ARI.high.risk/100,
+  sim.dodd.mix[[i]] <- init.popn.mix(ari.high=pars.tmp.mix$ARI.high.risk/100,
                                 ari.low=pars.tmp.mix$ARI.low.risk/100,
                                 low.prev=pars.tmp.mix$percent.low.risk)
 
-  pars.tmp.nomix <- pars.nomix[i,]
-  sim.dat.nomix[[i]] <- init.popn.nomix(ari=pars.tmp.nomix$ARI.low.risk/100)
+  pars.tmp.nomix <- ari.overall.mix[i]
+  sim.dodd.nomix[[i]] <- init.popn.nomix(ari=pars.tmp.nomix/100)
+
+  sim.sweep.mix[[i]] <- init.popn.mix(ari.high=pars.sweep$high.ARI..mix[i]/100,
+                                ari.low=pars.sweep$low.ARI..mix[i]/100,
+                                low.prev=pars.tmp.mix$percent.low.risk)
+
+  sim.sweep.nomix[[i]] <- init.popn.nomix(ari=pars.sweep$overall.ARI..no.mix[i]/100)
 }  
 ```
 
 ```{r, echo=FALSE}
 # first show overall number of infections by prevalence
 # need matrix with prevalence and number of infections, then have this by age group
-num.prev <- length(pars.mix[1:10,1]); num.age <-length(median.age)
+num.prev <- length(unique(pars.mix[,1])); num.age <-length(median.age)
 # data frame for plotting with age,prev,total infections
-num.inf.age.mix <- num.inf.age.nomix <- data.frame(prevalence=rep(pars.mix[1:10,1],each=num.age+1),
+num.inf.age.mix.dodd <- num.inf.age.nomix.dodd <-
+  num.inf.age.mix.sweep <- num.inf.age.nomix.sweep <- data.frame(prevalence=rep(pars.mix[1:10,1],each=num.age+1),
                              age.group=rep(c(0,median.age),num.prev),
                              total.infections=rep(NA,num.prev*(num.age+1)))
+
 # data frame with prevalence,number of infections (categorical), count with that number of infections/prev
-num.inf.mix <- num.inf.mix.hi <- num.inf.mix.lo <- num.inf.nomix <- data.frame(prevalence=rep(pars.mix[1:10,1],each=10),
+num.inf.mix.dodd <- num.inf.mix.hi.dodd <- num.inf.mix.lo.dodd <- num.inf.nomix.dodd <- 
+  num.inf.mix.sweep <- num.inf.mix.hi.sweep <- num.inf.mix.lo.sweep <- num.inf.nomix.sweep <- data.frame(prevalence=rep(pars.mix[1:10,1],each=10),
                              num.inf=rep(c(as.character(c(0:8)),"9+"),num.prev),
                              count=rep(NA,num.prev*10))
+
 # data frame for high/low and number of infections
-num.inf.hi.low <- data.frame(prevalence=rep(pars.mix[1:10,1],each=2),
+num.inf.hi.low.dodd <- num.inf.hi.low.sweep <- data.frame(prevalence=rep(pars.mix[1:10,1],each=2),
                              risk.cat=rep(c("High","Low"),10),
                              total.infections=rep(NA,num.prev*2))
+
 # data frame prev of LTBI for each prevalenceTB x age combo
-age.prev.LTBI.mix <- age.prev.LTBI.nomix <- matrix(0,nr=num.age,nc=10)
+age.prev.LTBI.mix.dodd <- age.prev.LTBI.nomix.dodd <- 
+  age.prev.LTBI.mix.sweep <- age.prev.LTBI.nomix.sweep <- matrix(0,nr=num.age,nc=10)
 
 for(i in 1:10){
   
-  # total number of infections in each age group by prevalence
-  tmp.inf <- sim.dat.mix[[i]]$all.pop
+  # total number of infected individuals in each age group by prevalence
+  #########################################################################
+  ## Dodd assumption
+  tmp.inf <- sim.dodd.mix[[i]]$all.pop
   tmp.inf <- tmp.inf[,2:ncol(tmp.inf)]
-  # total.infections: (total  infections, age specific number of infections)
-  num.inf.age.mix$total.infections[((i-1)*(num.age+1)+1):(i*(num.age+1))] <- round(c(sum(tmp.inf),apply(tmp.inf,1,sum)))
+  ### total.infections: (total  infections, age specific number of infections)
+  num.inf.age.mix.dodd$total.infections[((i-1)*(num.age+1)+1):(i*(num.age+1))] <- round(c(sum(tmp.inf),apply(tmp.inf,1,sum)))
 
-  tmp.inf <- sim.dat.nomix[[i]]$all.pop
+  tmp.inf <- sim.dodd.nomix[[i]]$all.pop
   tmp.inf <- tmp.inf[,2:ncol(tmp.inf)]
-  num.inf.age.nomix$total.infections[((i-1)*(num.age+1)+1):(i*(num.age+1))] <- 
+  num.inf.age.nomix.dodd$total.infections[((i-1)*(num.age+1)+1):(i*(num.age+1))] <- 
+    round(c(sum(tmp.inf),apply(tmp.inf,1,sum)))
+
+  ## par sweep
+  tmp.inf <- sim.sweep.mix[[i]]$all.pop
+  tmp.inf <- tmp.inf[,2:ncol(tmp.inf)]
+  ### total.infections: (total  infections, age specific number of infections)
+  num.inf.age.mix.sweep$total.infections[((i-1)*(num.age+1)+1):(i*(num.age+1))] <- round(c(sum(tmp.inf),apply(tmp.inf,1,sum)))
+
+  tmp.inf <- sim.sweep.nomix[[i]]$all.pop
+  tmp.inf <- tmp.inf[,2:ncol(tmp.inf)]
+  num.inf.age.nomix.sweep$total.infections[((i-1)*(num.age+1)+1):(i*(num.age+1))] <- 
     round(c(sum(tmp.inf),apply(tmp.inf,1,sum)))
   
-  # total number of infections by high/low risk category
-  tmp.inf.lo <- sim.dat.mix[[i]]$low.risk.pop
+  # total number of infected individuals by high/low risk category
+  ##################################################################
+  ## Dodd Assumption
+  tmp.inf.lo <- sim.dodd.mix[[i]]$low.risk.pop
   tmp.inf.lo <- tmp.inf.lo[,2:ncol(tmp.inf.lo)]
-  tmp.inf.hi <- sim.dat.mix[[i]]$high.risk.pop
+  tmp.inf.hi <- sim.dodd.mix[[i]]$high.risk.pop
   tmp.inf.hi <- tmp.inf.hi[,2:ncol(tmp.inf.hi)]
-  num.inf.hi.low$total.infections[((i-1)*2+1):(i*2)] <- round(c(sum(tmp.inf.hi),sum(tmp.inf.lo)))
+  num.inf.hi.low.dodd$total.infections[((i-1)*2+1):(i*2)] <- round(c(sum(tmp.inf.hi),sum(tmp.inf.lo)))
   
+  ## Par sweep
+  tmp.inf.lo <- sim.sweep.mix[[i]]$low.risk.pop
+  tmp.inf.lo <- tmp.inf.lo[,2:ncol(tmp.inf.lo)]
+  tmp.inf.hi <- sim.sweep.mix[[i]]$high.risk.pop
+  tmp.inf.hi <- tmp.inf.hi[,2:ncol(tmp.inf.hi)]
+  num.inf.hi.low.sweep$total.infections[((i-1)*2+1):(i*2)] <- round(c(sum(tmp.inf.hi),sum(tmp.inf.lo)))
+
   # total number of individuals with 0, 1,...,9+ infections by prevalence
-  tmp.inf <- sim.dat.mix[[i]]$all.pop
-  # compact together all individuals with 9+ infections
+  ##########################################################################
+  ## Dodd assumption
+  tmp.inf <- sim.dodd.mix[[i]]$all.pop
+  ### compact together all individuals with 9+ infections
   tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
-  num.inf.mix$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+  num.inf.mix.dodd$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
  
-  tmp.inf <- sim.dat.nomix[[i]]$all.pop
+  tmp.inf <- sim.dodd.nomix[[i]]$all.pop
   if(ncol(tmp.inf)<11){
     tmp <- as.data.frame(cbind(tmp.inf,matrix(rep(0,nrow(tmp.inf)*(11-ncol(tmp.inf))),nr=nrow(tmp.inf))))
     names(tmp)[(ncol(tmp.inf)+1):11] <- as.character((ncol(tmp.inf)+1):11) 
@@ -155,105 +207,156 @@ for(i in 1:10){
   }
   # compact together all individuals with 9+ infections
   tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
-  num.inf.nomix$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+  num.inf.nomix.dodd$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
   
-  # total number of individuals with 0,...9+ infections by prevalence, high/low
-  tmp.inf <- sim.dat.mix[[i]]$low.risk.pop
+  ## Par sweep
+  tmp.inf <- sim.sweep.mix[[i]]$all.pop
+  ### compact together all individuals with 9+ infections
+  tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
+  num.inf.mix.sweep$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+ 
+  tmp.inf <- sim.sweep.nomix[[i]]$all.pop
+  if(ncol(tmp.inf)<11){
+    tmp <- as.data.frame(cbind(tmp.inf,matrix(rep(0,nrow(tmp.inf)*(11-ncol(tmp.inf))),nr=nrow(tmp.inf))))
+    names(tmp)[(ncol(tmp.inf)+1):11] <- as.character((ncol(tmp.inf)+1):11) 
+    tmp.inf <- tmp
+  }
   # compact together all individuals with 9+ infections
   tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
-  num.inf.mix.lo$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
-  
-  tmp.inf <- sim.dat.mix[[i]]$high.risk.pop
-  # compact together all individuals with 9+ infections
-  tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
-  num.inf.mix.hi$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
-  
-  # prev of LTBI by age and TB prev
-  tmp.inf <- sim.dat.mix[[i]]$all.pop
-  tmp.inf <- tmp.inf[,1] #numbers with no infections
-  num.infect.age <- pop.age-tmp.inf
-  age.prev.LTBI.mix[,i] <- round(num.infect.age/pop.age,2)
+  num.inf.nomix.sweep$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
 
-  tmp.inf <- sim.dat.nomix[[i]]$all.pop
+  # total number of individuals with 0,...9+ infections by prevalence, high/low
+  ###############################################################################
+  ## Dodd assumption
+  tmp.inf <- sim.dodd.mix[[i]]$low.risk.pop
+  # compact together all individuals with 9+ infections
+  tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
+  num.inf.mix.lo.dodd$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+  
+  tmp.inf <- sim.dodd.mix[[i]]$high.risk.pop
+  # compact together all individuals with 9+ infections
+  tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
+  num.inf.mix.hi.dodd$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+  
+  ## Par sweep
+  tmp.inf <- sim.sweep.mix[[i]]$low.risk.pop
+  # compact together all individuals with 9+ infections
+  tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
+  num.inf.mix.lo.sweep$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+  
+  tmp.inf <- sim.sweep.mix[[i]]$high.risk.pop
+  # compact together all individuals with 9+ infections
+  tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
+  num.inf.mix.hi.sweep$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+
+  # prev of LTBI by age and TB prev
+  ###########################################
+  ## Dodd assumption
+  tmp.inf <- sim.dodd.mix[[i]]$all.pop
   tmp.inf <- tmp.inf[,1] #numbers with no infections
   num.infect.age <- pop.age-tmp.inf
-  age.prev.LTBI.nomix[,i] <- round(num.infect.age/pop.age,2)
+  age.prev.LTBI.mix.dodd[,i] <- round(num.infect.age/pop.age,2)
+
+  tmp.inf <- sim.dodd.nomix[[i]]$all.pop
+  tmp.inf <- tmp.inf[,1] #numbers with no infections
+  num.infect.age <- pop.age-tmp.inf
+  age.prev.LTBI.nomix.dodd[,i] <- round(num.infect.age/pop.age,2)
+
+  ## Par sweep
+  tmp.inf <- sim.sweep.mix[[i]]$all.pop
+  tmp.inf <- tmp.inf[,1] #numbers with no infections
+  num.infect.age <- pop.age-tmp.inf
+  age.prev.LTBI.mix.sweep[,i] <- round(num.infect.age/pop.age,2)
+
+  tmp.inf <- sim.sweep.nomix[[i]]$all.pop
+  tmp.inf <- tmp.inf[,1] #numbers with no infections
+  num.infect.age <- pop.age-tmp.inf
+  age.prev.LTBI.nomix.sweep[,i] <- round(num.infect.age/pop.age,2)
 
 }
 
-max.inf <- max(max(num.inf.age.nomix$total.infections),max(num.inf.age.mix$total.infections))
+max.inf.dodd <- 
+  max(max(num.inf.age.nomix.dodd$total.infections),max(num.inf.age.mix.dodd$total.infections))
+max.inf.sweep <- 
+  max(max(num.inf.age.nomix.sweep$total.infections),max(num.inf.age.mix.sweep$total.infections))
+max.inf <- max(max.inf.dodd,max.inf.sweep)
 ```
 
 
-### No mixing
+### Dodd, Homogeneous risk
+
+This block of results uses the Dodd et al ARIs (determined from prevalence and using data from uninfected children) with the assumption of homogeneous risk of infection in the population.
 
 ```{r,echo=FALSE}
 # plot the results for no mixing group
 colorCount <- num.age
 getPalette <- colorRampPalette(brewer.pal(9,"Paired"))
 
-ggplot(data=num.inf.age.nomix[num.inf.age.nomix$age.group==0,],aes(x=prevalence,y=total.infections))+
+ggplot(data=num.inf.age.nomix.dodd[num.inf.age.nomix.dodd$age.group==0,],aes(x=prevalence,y=total.infections))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infections",x="TB prevalence",y="Total number baseline infections")
+  labs(title="Total number of infected individuals",x="TB prevalence",y="Total number baseline infections")
 
-ggplot(data=num.inf.age.nomix[num.inf.age.nomix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+ggplot(data=num.inf.age.nomix.dodd[num.inf.age.nomix.dodd$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infections by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
 
-ggplot(data=num.inf.nomix,aes(x=prevalence,y=count,fill=num.inf))+
+ggplot(data=num.inf.nomix.dodd,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
   labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
 
 ```
 
-To demonstrate that the mixing creates more individuals with a higher number of prior infections, we focus in on those with at least six prior infections in this plot.
+We focus in on those with at least six prior infections in this plot.
 
 ```{r,echo=FALSE}
 # just plot those with at least 6 infections
-ggplot(data=num.inf.nomix[num.inf.nomix$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
+ggplot(data=num.inf.nomix.dodd[num.inf.nomix.dodd$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
   labs(title="Distribution of the number of prior infections, at least 6 infections",x="TB prevalence",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
 
 ```
 
-Finally, we show the prevalence of LTBI by age and TB disease prevalance. This can be compared to the Dodd et al data.
+Finally, we show the prevalence of LTBI by age and TB disease prevalence. This can be compared to the Dodd et al data.
 
 ```{r,echo=F}
-row.names(age.prev.LTBI.nomix) <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65=-69","70-74","75-79","80-84","85+")
+row.names(age.prev.LTBI.nomix.dodd) <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65=-69","70-74","75-79","80-84","85+")
 
-age.prev.LTBI.nomix %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400","Prev500","Prev600","Prev700","Prev800","Prev900","Prev1000"),
+age.prev.LTBI.nomix.dodd %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400","Prev500","Prev600","Prev700","Prev800","Prev900","Prev1000"),
                             caption="Prevalence of LTBI by age and TB prevalence") %>% kable_styling()
 ```
 
-### Mixing
+### Dodd, Heterogeneous risk
+
+This section shows results using the Dodd ARIs (derived from prevalence data and using studies on unifected children). Here we assume that 20% of the population are in a high risk category and have an ARI that is 6 times higher than the remaining 80% of the population.
+
 ```{r, echo=F}
 # plot the results for mixing group
-ggplot(data=num.inf.age.mix[num.inf.age.mix$age.group==0,],aes(x=prevalence,y=total.infections))+
+ggplot(data=num.inf.age.mix.dodd[num.inf.age.mix.dodd$age.group==0,],aes(x=prevalence,y=total.infections))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infections",x="TB prevalence",y="Total number baseline infections")
+  labs(title="Total number of infected individuals",x="TB prevalence",y="Total number baseline infections")
 
-ggplot(data=num.inf.age.mix[num.inf.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+ggplot(data=num.inf.age.mix.dodd[num.inf.age.mix.dodd$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infections by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
 
-ggplot(data=num.inf.mix,aes(x=prevalence,y=count,fill=num.inf))+
+ggplot(data=num.inf.mix.dodd,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
   labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
 ```
 
-To demonstrate that the mixing creates more individuals with a higher number of prior infections, we focus in on those with at least six prior infections in this plot.
+We focus in on those with at least six prior infections in this plot.
 ```{r, echo=FALSE}
 # just plot those with at least  infections
-ggplot(data=num.inf.mix[num.inf.mix$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
+ggplot(data=num.inf.mix.dodd[num.inf.mix.dodd$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
   labs(title="Distribution of the number of prior infections, at least 6 infections",x="TB prevalence",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
@@ -263,9 +366,9 @@ ggplot(data=num.inf.mix[num.inf.mix$num.inf>5,],aes(x=prevalence,y=count,fill=nu
 We show the prevalence of LTBI by age and TB disease prevlance. This can be compared to the Dodd et al data.
 
 ```{r,echo=F}
-row.names(age.prev.LTBI.mix) <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65=-69","70-74","75-79","80-84","85+")
+row.names(age.prev.LTBI.mix.dodd) <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65=-69","70-74","75-79","80-84","85+")
 
-age.prev.LTBI.mix %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400","Prev500","Prev600","Prev700","Prev800","Prev900","Prev1000"),
+age.prev.LTBI.mix.dodd %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400","Prev500","Prev600","Prev700","Prev800","Prev900","Prev1000"),
                             caption="Prevalence of LTBI by age and TB prevalence") %>% kable_styling()
 ```
 
@@ -273,21 +376,136 @@ We also show the total number of infections and total number of times individual
 
 ```{r,echo=FALSE}
 # add plot on for total number of infections by risk category
-ggplot(data=num.inf.hi.low,aes(x=prevalence,y=total.infections,fill=as.factor(risk.cat)))+
+ggplot(data=num.inf.hi.low.dodd,aes(x=prevalence,y=total.infections,fill=as.factor(risk.cat)))+
   geom_bar(stat="identity")+
-  labs(title="Total number of infections by risk category",x="TB prevalence",y="Total number of infections")+
+  labs(title="Total number of infected individuals by risk category",x="TB prevalence",y="Total number of infections")+
   scale_fill_brewer(name="Risk category",palette="Paired")
 
 ```
 We can also consider the number of infections individuals have by prevalence and risk category.
 
 ```{r, echo=F}
-ggplot(data=num.inf.mix.lo,aes(x=prevalence,y=count,fill=num.inf))+
+ggplot(data=num.inf.mix.lo.dodd,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
   labs(title="Distribution of the number of prior infections\nLow Risk",x="TB prevalence",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
 
-ggplot(data=num.inf.mix.hi,aes(x=prevalence,y=count,fill=num.inf))+
+ggplot(data=num.inf.mix.hi.dodd,aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections\nHigh Risk",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+
+```
+
+### Parameter sweep, Homogeneous risk
+
+This block of results uses the parameter sweep determined ARI (determined assuming a two duration such that prevalence=2*incidence) with the assumption of homogeneous risk of infection in the population.
+
+```{r,echo=FALSE}
+# plot the results for no mixing group
+colorCount <- num.age
+getPalette <- colorRampPalette(brewer.pal(9,"Paired"))
+
+ggplot(data=num.inf.age.nomix.sweep[num.inf.age.nomix.sweep$age.group==0,],aes(x=prevalence,y=total.infections))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="Total number of infected individuals",x="TB prevalence",y="Total number baseline infections")
+
+ggplot(data=num.inf.age.nomix.sweep[num.inf.age.nomix.sweep$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  scale_fill_manual(name="Median age",values=getPalette(colorCount))+
+  theme(legend.position = "bottom")+
+  guides(fill=guide_legend(nrow=2))
+
+ggplot(data=num.inf.nomix.sweep,aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+
+```
+
+We focus in on those with at least six prior infections in this plot.
+
+```{r,echo=FALSE}
+# just plot those with at least 6 infections
+ggplot(data=num.inf.nomix.sweep[num.inf.nomix.dodd$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections, at least 6 infections",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+
+```
+
+Finally, we show the prevalence of LTBI by age and TB disease prevalence. This can be compared to the Dodd et al data.
+
+```{r,echo=F}
+row.names(age.prev.LTBI.nomix.sweep) <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65=-69","70-74","75-79","80-84","85+")
+
+age.prev.LTBI.nomix.sweep %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400","Prev500","Prev600","Prev700","Prev800","Prev900","Prev1000"),
+                            caption="Prevalence of LTBI by age and TB prevalence") %>% kable_styling()
+```
+
+### Parameter sweep, Heterogeneous risk
+
+
+This block of results uses the parameter sweep determined ARI (determined assuming a two duration such that prevalence=2*incidence) with the assumption of homogeneous risk of infection in the population. Here we assume that 20% of the population are in a high risk category and have an ARI that is 6 times higher than the remaining 80% of the population.
+
+```{r, echo=F}
+# plot the results for mixing group
+ggplot(data=num.inf.age.mix.sweep[num.inf.age.mix.sweep$age.group==0,],aes(x=prevalence,y=total.infections))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="Total number of infected individuals",x="TB prevalence",y="Total number baseline infections")
+
+ggplot(data=num.inf.age.mix.sweep[num.inf.age.mix.sweep$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  scale_fill_manual(name="Median age",values=getPalette(colorCount))+
+  theme(legend.position = "bottom")+
+  guides(fill=guide_legend(nrow=2))
+
+ggplot(data=num.inf.mix.sweep,aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+```
+
+We focus in on those with at least six prior infections in this plot.
+```{r, echo=FALSE}
+# just plot those with at least  infections
+ggplot(data=num.inf.mix.sweep[num.inf.mix.sweep$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections, at least 6 infections",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+
+```
+
+We show the prevalence of LTBI by age and TB disease prevlance. This can be compared to the Dodd et al data.
+
+```{r,echo=F}
+row.names(age.prev.LTBI.mix.sweep) <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65=-69","70-74","75-79","80-84","85+")
+
+age.prev.LTBI.mix.sweep %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400","Prev500","Prev600","Prev700","Prev800","Prev900","Prev1000"),
+                            caption="Prevalence of LTBI by age and TB prevalence") %>% kable_styling()
+```
+
+We also show the total number of infections and total number of times individuals have been infected by risk category.
+
+```{r,echo=FALSE}
+# add plot on for total number of infections by risk category
+ggplot(data=num.inf.hi.low.sweep,aes(x=prevalence,y=total.infections,fill=as.factor(risk.cat)))+
+  geom_bar(stat="identity")+
+  labs(title="Total number of infected individuals by risk category",x="TB prevalence",y="Total number of infections")+
+  scale_fill_brewer(name="Risk category",palette="Paired")
+
+```
+We can also consider the number of infections individuals have by prevalence and risk category.
+
+```{r, echo=F}
+ggplot(data=num.inf.mix.lo.sweep,aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections\nLow Risk",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+
+ggplot(data=num.inf.mix.hi.sweep,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
   labs(title="Distribution of the number of prior infections\nHigh Risk",x="TB prevalence",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
@@ -296,83 +514,113 @@ ggplot(data=num.inf.mix.hi,aes(x=prevalence,y=count,fill=num.inf))+
 
 ## New cases generated over one year {.tabset}
 
-We now generate cases over a one year period. All infected individuals with no reinfection in this year have a `r prog.old.inf` probability of progressing to active disease. Individuals with a first infection have a `r TB.prog[1]` probability of progressing. Those with a new re-infection follow the probability of progressing determine by either Ackley or assuming there is constant 75% protection from progressing, independent of the number of prior infections. 
+We now generate cases over a one year period. All infected individuals with no reinfection in this year have a `r prog.old.inf` probability of progressing to active disease. Individuals with a first infection have a `r TB.prog[1]` probability of progressing. Those with a new re-infection follow the probability of progressing determined by Ackley. 
 
 ```{r,echo=F}
 
 # simulate populations for each set of parameters and then get the basic summary statistics (not age specific)
 ## run the mixing scenarios ## 
 ##############################
-res.print.mix.ackley <- res.print.mix.nackley <- matrix(0,nr=nrow(pars.mix),ncol=15)
+res.print.mix.ackley.dodd <- res.print.mix.ackley.sweep <- matrix(0,nr=nrow(pars.mix),ncol=15)
+
 for(i in 1:nrow(pars.mix)){
-  pars.tmp <- pars.mix[i,]
+  # simulation new infections/cases
+  #######################################
+  ## Dodd assumption
+  pars.tmp.dodd <- pars.mix[i,]
   
   if(is.na(pars.mix[i,1])){break}
   
   # simulate the initial population
-  sim.dat.tmp <- sim.dat.mix[[i]]
+  sim.dat.tmp <- sim.dodd.mix[[i]]
   
   # generate new cases
   max.inf <- ncol(sim.dat.tmp$all.pop)-1
   
-  TB.prog <- c(prog.1,seq(prog.2,prog.2+prog.step*(max.inf-1),prog.step))
-  TB.prog[TB.prog>0.13] <- 0.13
+  TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+  TB.prog.sim[TB.prog.sim>1] <- 1
 
-  TB.prog2 <- c(prog.1,rep(prog.2,max.inf))
+  run.cases.dodd <- TB.sim(init.pop=sim.dat.tmp,TB.prog=TB.prog.sim,ari.high=pars.mix$ARI.high.risk[i]/100,ari.low=pars.mix$ARI.low.risk[i]/100,prog.old.inf)
 
+  ## Par sweep
+  pars.tmp.sweep <- pars.sweep[i,]
   
-  run.cases.ackley <- TB.sim(init.pop=sim.dat.tmp,TB.prog=TB.prog,ari.high=pars.mix$ARI.high.risk[i]/100,ari.low=pars.mix$ARI.low.risk[i]/100,prog.old.inf)
+  if(is.na(pars.sweep[i,1])){break}
+  
+  # simulate the initial population
+  sim.dat.tmp <- sim.sweep.mix[[i]]
+  
+  # generate new cases
+  max.inf <- ncol(sim.dat.tmp$all.pop)-1
+  
+  TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+  TB.prog.sim[TB.prog.sim>1] <- 1
 
-    run.cases.nackley <- TB.sim(init.pop=sim.dat.tmp,TB.prog=TB.prog2,ari.high=pars.mix$ARI.high.risk[i]/100,ari.low=pars.mix$ARI.low.risk[i]/100,prog.old.inf)
+  run.cases.sweep <- 
+    TB.sim(init.pop=sim.dat.tmp,TB.prog=TB.prog.sim,ari.high=pars.tmp.sweep$high.ARI..mix/100,ari.low=pars.tmp.sweep$low.ARI..mix/100,prog.old.inf)
 
   # get summary stats
-  results.sum.ackley <- sum.stats(run.cases.ackley,pars.tmp)
-  results.sum.nackley <- sum.stats(run.cases.nackley,pars.tmp)
+  ##############################
+  results.dodd <- sum.stats(run.cases.dodd,pars.tmp.dodd)
+  results.sweep <- sum.stats(run.cases.sweep,pars.tmp.dodd) # pars here only uses prevalence, so use mix pars that are in correct format
   
-  res.print.mix.ackley[i,] <- c(results.sum.ackley$totals[,1],results.sum.ackley$true.prev,results.sum.ackley$incidence,results.sum.ackley$duration,results.sum.ackley$Rt.inf,results.sum.ackley$Rt.dis)
+  res.print.mix.ackley.dodd[i,] <-as.numeric(c(results.dodd$totals[,1],results.dodd$true.prev,results.dodd$incidence,results.dodd$duration,results.dodd$Rt.inf,results.dodd$Rt.dis))
 
-    res.print.mix.nackley[i,] <- c(results.sum.nackley$totals[,1],results.sum.nackley$true.prev,results.sum.nackley$incidence,results.sum.nackley$duration,results.sum.nackley$Rt.inf,results.sum.nackley$Rt.dis)
+  res.print.mix.ackley.sweep[i,] <- as.numeric(c(results.sweep$totals[,1],results.sweep$true.prev,results.sweep$incidence,results.sweep$duration,results.sweep$Rt.inf,results.sweep$Rt.dis))
   
 }
 
-colnames(res.print.mix.ackley) <- colnames(res.print.mix.nackley) <- c("low risk: ATB from first inf","low risk: ATB from reinfection", "low risk: total ATB", "high risk: ATB from first int","high risk: ATB from reinfection", "high risk: total ATB", "ATB from old infections",
+colnames(res.print.mix.ackley.dodd) <- colnames(res.print.mix.ackley.sweep) <- c("low risk: ATB from first inf","low risk: ATB from reinfection", "low risk: total ATB", "high risk: ATB from first int","high risk: ATB from reinfection", "high risk: total ATB", "ATB from old infections",
                               "Total ATB","percent first inf","percent old inf", "corrected prevalence","incidence (per 100,000)","duration","Rt infections","Rt disease")
 
 #################################
 ## run the no mixing scenarios ## 
 #################################
-res.print.nomix.ackley <- res.print.nomix.nackley <- matrix(0,nr=nrow(pars.nomix),ncol=9)
+res.print.nomix.ackley.dodd <- res.print.nomix.ackley.sweep <- matrix(0,nr=nrow(pars.nomix),ncol=9)
 for(i in 1:nrow(pars.nomix)){
+  ## Dodd assumption
   pars.tmp <- pars.nomix[i,]
   
   if(is.na(pars.nomix[i,1])){break}
   
   # simulate the initial population
-  sim.dat.tmp <- sim.dat.nomix[[i]]
+  sim.dat.tmp <- sim.dodd.nomix[[i]]
   
   # generate new cases
   max.inf <- ncol(sim.dat.tmp$all.pop)-1
   
-  TB.prog <- c(prog.1,seq(prog.2,prog.2+prog.step*(max.inf-1),prog.step))
-  TB.prog[TB.prog>0.13] <- 0.13
+  TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+  TB.prog.sim[TB.prog.sim>1] <- 1
 
-  TB.prog2 <- c(prog.1,rep(prog.2,max.inf))
+  run.cases.ackley.dodd <- TB.sim.nomix(init.pop=sim.dat.tmp,TB.prog=TB.prog.sim,ari=ari.overall.mix/100,prog.old.inf)
 
-  run.cases.ackley <- TB.sim.nomix(init.pop=sim.dat.tmp,TB.prog=TB.prog,ari=pars.nomix$ARI.low.risk[i]/100,prog.old.inf)
-
-  run.cases.nackley <- TB.sim.nomix(init.pop=sim.dat.tmp,TB.prog=TB.prog2,ari=pars.nomix$ARI.low.risk[i]/100,prog.old.inf)
-
-  # get summary stats
-  results.sum.ackley <- sum.stats(run.cases.ackley,pars.tmp,mix=F)
-  results.sum.nackley <- sum.stats(run.cases.nackley,pars.tmp,mix=F)
+  ## Parameter sweep
+  pars.tmp.sweep <- pars.sweep[i,]
   
-  res.print.nomix.ackley[i,] <- c(results.sum.ackley$totals[,1],results.sum.ackley$true.prev,results.sum.ackley$incidence,results.sum.ackley$duration,results.sum.ackley$Rt.inf,results.sum.ackley$Rt.dis)
+  if(is.na(pars.nomix[i,1])){break}
+  
+  # simulate the initial population
+  sim.dat.tmp <- sim.sweep.nomix[[i]]
+  
+  # generate new cases
+  max.inf <- ncol(sim.dat.tmp$all.pop)-1
+  
+  TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+  TB.prog.sim[TB.prog.sim>1] <- 1
 
-    res.print.nomix.nackley[i,] <- c(results.sum.nackley$totals[,1],results.sum.nackley$true.prev,results.sum.nackley$incidence,results.sum.nackley$duration,results.sum.nackley$Rt.inf,results.sum.nackley$Rt.dis)
+  run.cases.ackley.sweep <- TB.sim.nomix(init.pop=sim.dat.tmp,TB.prog=TB.prog.sim,ari=pars.tmp.sweep$overall.ARI..no.mix/100,prog.old.inf)
+
+  ## get summary stats
+  results.dodd <- sum.stats(run.cases.ackley.dodd,pars.tmp.dodd,mix=F)
+  results.sweep <- sum.stats(run.cases.ackley.sweep,pars.tmp.dodd,mix=F)
+  
+  res.print.nomix.ackley.dodd[i,] <- as.numeric(c(results.dodd$totals[,1],results.dodd$true.prev,results.dodd$incidence,results.dodd$duration,results.dodd$Rt.inf,results.dodd$Rt.dis))
+
+  res.print.nomix.ackley.sweep[i,] <- as.numeric(c(results.sweep$totals[,1],results.sweep$true.prev,results.sweep$incidence,results.sweep$duration,results.sweep$Rt.inf,results.sweep$Rt.dis))
   
 }
 
-colnames(res.print.nomix.ackley) <- colnames(res.print.nomix.nackley) <- c("ATB from old infections",
+colnames(res.print.nomix.ackley.dodd) <- colnames(res.print.nomix.ackley.sweep) <- c("ATB from old infections",
                               "Total ATB","percent first inf","percent old inf", "corrected prevalence","incidence (per 100,000)","duration","Rt infections","Rt disease")
 ```
 
@@ -395,27 +643,27 @@ We can calculate the following statistics (the first 6 only apply to the mixing 
 - Reproductive number for disease (= #ATB from new infections/corrected prevalence)
 
 
-### Mixing, Ackley
+### Dodd, homogeneous risk
 
 ```{R,echo=F}
-  res.print.mix.ackley %>% kbl() %>% kable_styling()
+  res.print.nomix.ackley.dodd %>% kbl() %>% kable_styling()
 ```
 
-### Mixing, No Ackley
+### Dodd, heterogeneous risk
 
 ```{r,echo=F}
-  res.print.mix.nackley %>% kbl() %>% kable_styling()
+  res.print.mix.ackley.dodd %>% kbl() %>% kable_styling()
 ```
 
-### No Mixing, Ackley
+### Parameter sweep, homogeneous risk
 ```{r,echo=F}
-  res.print.nomix.ackley %>% kbl() %>% kable_styling()
+  res.print.nomix.ackley.sweep %>% kbl() %>% kable_styling()
 ```
 
-### No Mixing, No Ackley
+### Parameter sweep, heterogeneous risk
 
 ```{r,echo=F}
-  res.print.nomix.nackley %>% kbl() %>% kable_styling()
+  res.print.mix.ackley.sweep %>% kbl() %>% kable_styling()
 ```
 
 
@@ -423,39 +671,42 @@ We can calculate the following statistics (the first 6 only apply to the mixing 
 We show the number of TB disease cases by prevalence and source (old infection, new primary infection, re-infection).
 
 ```{r,echo=FALSE}
-print.nomix.ackley <- print.nomix.nackley <- print.mix.ackley <- print.mix.nackley <- data.frame(prevalence=rep(pars.mix[1:10,1],3),
+print.nomix.dodd <- print.nomix.sweep <- print.mix.dodd <- print.mix.sweep <- data.frame(prevalence=rep(pars.mix[1:10,1],3),
                              source=rep(c("Old infection","New infection","Reinfection"),each=10),
                              count=rep(NA,30))
 
-print.nomix.ackley$count <- c(res.print.nomix.ackley[,1],res.print.nomix.ackley[,3]*res.print.nomix.ackley[,2],
-                              (1-(res.print.nomix.ackley[,3]+res.print.nomix.ackley[,4]))*res.print.nomix.ackley[,2])
-print.nomix.nackley$count <- c(res.print.nomix.nackley[,1],res.print.nomix.nackley[,3]*res.print.nomix.nackley[,2],
-                              (1-(res.print.nomix.nackley[,3]+res.print.nomix.nackley[,4]))*res.print.nomix.nackley[,2])
+print.nomix.dodd$count <- c(res.print.nomix.ackley.dodd[,1],res.print.nomix.ackley.dodd[,3]*res.print.nomix.ackley.dodd[,2],
+                              (1-(res.print.nomix.ackley.dodd[,3]+res.print.nomix.ackley.dodd[,4]))*res.print.nomix.ackley.dodd[,2])
+print.nomix.sweep$count <- c(res.print.nomix.ackley.sweep[,1],res.print.nomix.ackley.sweep[,3]*res.print.nomix.ackley.sweep[,2],
+                              (1-(res.print.nomix.ackley.sweep[,3]+res.print.nomix.ackley.sweep[,4]))*res.print.nomix.ackley.sweep[,2])
 
-print.mix.ackley$count <- c(res.print.mix.ackley[,7],res.print.mix.ackley[,9]*res.print.mix.ackley[,8],
-                              (1-(res.print.mix.ackley[,9]+res.print.mix.ackley[,10]))*res.print.mix.ackley[,8])
-print.mix.nackley$count <- c(res.print.mix.nackley[,7],res.print.mix.nackley[,9]*res.print.mix.nackley[,8],
-                              (1-(res.print.mix.nackley[,9]+res.print.mix.nackley[,10]))*res.print.mix.nackley[,8])
+print.mix.dodd$count <- c(res.print.mix.ackley.dodd[,7],res.print.mix.ackley.dodd[,9]*res.print.mix.ackley.dodd[,8],
+                              (1-(res.print.mix.ackley.dodd[,9]+res.print.mix.ackley.dodd[,10]))*res.print.mix.ackley.dodd[,8])
+print.mix.sweep$count <- c(res.print.mix.ackley.sweep[,7],res.print.mix.ackley.sweep[,9]*res.print.mix.ackley.sweep[,8],
+                              (1-(res.print.mix.ackley.sweep[,9]+res.print.mix.ackley.sweep[,10]))*res.print.mix.ackley.sweep[,8])
+
+max.sweep <- max(sum(print.nomix.sweep$count[print.nomix.sweep$prevalence==1000]),sum(print.mix.sweep$count[print.mix.sweep$prevalence==1000]))
+max.dodd <- max(sum(print.nomix.dodd$count[print.nomix.dodd$prevalence==1000]),sum(print.mix.dodd$count[print.mix.dodd$prevalence==1000]))
 
 # create bar plots
-ggplot(data=print.nomix.nackley,aes(x=prevalence,y=count,fill=source))+
-  geom_bar(stat="identity")+ylim(0,2000)+
-  labs(title="Number of new cases\nNo mixing, No Ackley",x="TB prevalence",y="Number of cases")+
+ggplot(data=print.nomix.dodd,aes(x=prevalence,y=count,fill=source))+
+  geom_bar(stat="identity")+ylim(c(0,max.dodd))+
+  labs(title="Number of new cases\nNo mixing, Dodd ARI",x="TB prevalence",y="Number of cases")+
   scale_fill_brewer(name="Source of cases",palette="Paired")
 
-ggplot(data=print.nomix.ackley,aes(x=prevalence,y=count,fill=source))+
-  geom_bar(stat="identity")+ylim(0,2000)+
-  labs(title="Number of new cases\nNo mixing, Ackley",x="TB prevalence",y="Number of cases")+
+ggplot(data=print.nomix.sweep,aes(x=prevalence,y=count,fill=source))+
+  geom_bar(stat="identity")+ylim(c(0,max.sweep))+
+  labs(title="Number of new cases\nNo mixing, Sweep ARI",x="TB prevalence",y="Number of cases")+
   scale_fill_brewer(name="Source of cases",palette="Paired")
 
-ggplot(data=print.mix.nackley,aes(x=prevalence,y=count,fill=source))+
-  geom_bar(stat="identity")+ylim(0,2000)+
-  labs(title="Number of new cases\nMixing, No Ackley",x="TB prevalence",y="Number of cases")+
+ggplot(data=print.mix.dodd,aes(x=prevalence,y=count,fill=source))+
+  geom_bar(stat="identity")+ylim(c(0,max.dodd))+
+  labs(title="Number of new cases\nMixing, Dodd ARI",x="TB prevalence",y="Number of cases")+
   scale_fill_brewer(name="Source of cases",palette="Paired")
 
-ggplot(data=print.mix.ackley,aes(x=prevalence,y=count,fill=source))+
-  geom_bar(stat="identity")+ylim(0,2000)+
-  labs(title="Number of new cases\nMixing, Ackley",x="TB prevalence",y="Number of cases")+
+ggplot(data=print.mix.sweep,aes(x=prevalence,y=count,fill=source))+
+  geom_bar(stat="identity")+ylim(c(0,max.sweep))+
+  labs(title="Number of new cases\nMixing, Sweep ARI",x="TB prevalence",y="Number of cases")+
   scale_fill_brewer(name="Source of cases",palette="Paired")
 
 ```
