@@ -1,5 +1,5 @@
 # do parameter sweep to determine optimal ARI 
-source("utils.R")
+source("./R/utils.R")
 
 # get optimal ARI for mixing scenario
 aris <- seq(0.0001,0.3,0.0001)
@@ -54,4 +54,4 @@ names(results) <- c("Prev(per100k)","Correct Prev","Target Inc","overall ARI, no
                     "Incidence achieved, no mix","overall ARI, mix","low ARI, mix",
                     "high ARI, mix","Incidence achieved, mix")
 
-write.csv(results,"G:/My Drive/Work/TB Projects/ReMoTe/Parameters/parSweepAll_2yr.csv")
+write.csv(results,"./Parameters/parSweepAll_2yr.csv")

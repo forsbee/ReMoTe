@@ -10,7 +10,6 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r, include=FALSE}
-setwd("G:/My Drive/Work/TB Projects/ReMoTe")
 source("./R/utils.R")
 library(ggplot2)
 library(reshape)

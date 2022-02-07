@@ -14,6 +14,9 @@ library(grid)
 library(scales)
 library(dplyr)
 library(data.table)
+library(ggplot2)
+library(reshape)
+library(kableExtra)
 options(scipen = 999)
 
 
@@ -278,7 +281,7 @@ TB.sim.nomix <- function(init.pop,TB.prog,ari,prog.old.inf=0.00075){
   
   results.all <- list(init.pop=init.pop, # initial population
                       new.inf.pop.t1=new.infections.t1, # all new infections generate
-                      pop.old.t1=old.inf, # number of old LTBI in high risk popn by age
+                      pop.old.t1=old.inf, # number of old LTBI by age
                       ATB.new=ATB.all.new, # all new ATB cases from new infections by age and number of previous infections
                       cases.by.age=num.cases, # total number of cases by age-includes old and new infections
                       ATB.old=ATB.old #number of cases from old infections in high risk group
@@ -434,7 +437,9 @@ sum.stats <- function(results.all,pars.tmp,mix=T){
   }
 }
 
-# function to run the overall simulation for input overall ari
+################################################################
+# function to run the overall simulation for input overall ari #
+################################################################
 runSimulation <- function(ari.overall,low.prev=0.8,
                           mix=T,
               TB.prog=c(0.04,0.02,0.01),
@@ -456,9 +461,14 @@ runSimulation <- function(ari.overall,low.prev=0.8,
     # get TB progression rates
     max.inf <- ncol(sim.popn$all.pop)-1
   
+    if(TB.prog[3]>0){
     TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
     TB.prog.sim[TB.prog.sim>1] <- 1
-  
+    }else{
+      TB.prog.sim <- c(TB.prog[1],rep(TB.prog[2],max.inf))
+      TB.prog.sim[TB.prog.sim>1] <- 1
+    }
+    
     # generate new cases of disease
     new.cases <- TB.sim(init.pop=sim.popn,
                       TB.prog=TB.prog.sim,
@@ -469,15 +479,22 @@ runSimulation <- function(ari.overall,low.prev=0.8,
     # get incidence
     ATB.tot <- sum(new.cases$cases.by.age)
     incidence <- ATB.tot/10
-    }else if(mix==F){
+    new.infections <- sum(new.cases$new.inf.pop.t1[,2]) # number of people infected for the first time
+    num.uninfected <- sum(new.cases$init.pop[[1]][,1]) # number of people never infected
+  }else if(mix==F){
       # initialize population
       sim.popn <- init.popn.nomix(ari=ari.overall)
       
       # get TB progression rates
       max.inf <- ncol(sim.popn$all.pop)-1
       
-      TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
-      TB.prog.sim[TB.prog.sim>1] <- 1
+      if(TB.prog[3]>0){
+        TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+        TB.prog.sim[TB.prog.sim>1] <- 1
+      }else{
+        TB.prog.sim <- c(TB.prog[1],rep(TB.prog[2],max.inf))
+        TB.prog.sim[TB.prog.sim>1] <- 1
+      }
       
       # generate new cases of disease
       new.cases <- TB.sim.nomix(init.pop=sim.popn,
@@ -487,11 +504,110 @@ runSimulation <- function(ari.overall,low.prev=0.8,
       # get incidence
       ATB.tot <- sum(new.cases$cases.by.age)
       incidence <- ATB.tot/10
+      new.infections <- sum(new.cases$new.inf.pop.t1[,2]) # number of people infected for the first time
+      num.uninfected <- sum(new.cases$init.pop[[1]][,1]) # number of people never infected at start of simulation
     }
   
-  return(incidence)
+  return(list(incidence=incidence,
+              new.infections=new.infections,
+              num.uninfected=num.uninfected))
   
 }
 
+###########################################################
+## RUN THE PARAMETER SWEEP WITH TARGET PARAMETERS
+###########################################################
+runSweep <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100,
+                     mix=T,low.prev=0.8,TB.prog=c(0.04,0.02,0.01),
+                     ari.seek.min=0.0001,ari.seek.max=0.07,
+                     prevs=seq(100,1000,100)){
+  
+  # get optimal ARI for mixing scenario
+  aris <- seq(ari.seek.min,ari.seek.max,0.0001)
+  aris.obs <- NULL
+  for(i in 1:length(aris)){
+    
+    if(mix==T){
+    tmp <- runSimulation(ari.overall=aris[i],low.prev=low.prev,
+                         mix=T,
+                         TB.prog=TB.prog,
+                         prog.old.inf=0.00075,
+                         pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
+                         median.age=c(2,7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87))
+    
+    aris.obs[i] <- tmp$new.infections/tmp$num.uninfected
+    }else if(mix==F){
+    tmp <- runSimulation(ari.overall=aris[i],low.prev=low.prev,
+                         mix=F,
+                         TB.prog=TB.prog,
+                         prog.old.inf=0.00075,
+                         pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
+                         median.age=c(2,7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87))
+    
+    aris.obs[i] <- tmp$new.infections/tmp$num.uninfected
+    }
+  }  
+  
+  # now select the ARI that works for our selected prevalences
+  
+  ARI.overall <- ARI.low <- ARI.high <- 
+    ari.achieved <- NULL
+  
+  for(i in 1:length(ari.goal)){
+    # get overall ARI for mixing scenario
+    index <- which.min(abs(aris.obs-ari.goal[i]))
+    ARI.overall[i] <- aris[index]*100
+    ari.achieved[i] <- aris.obs[index]*100
+    
+    if(mix==T){
+      ARI.low[i] <- ARI.overall[i]/(low.prev+(1-low.prev)*6)
+      ARI.high[i] <- 6*ARI.low[i]
+    }
 
+  }
+  
+  results <- data.frame(prevs,prevs*1.66,
+                        ARI.overall,
+                        ARI.low,ARI.high,ari.achieved)
+  names(results) <- c("Prev(per100k)","Correct Prev","overall ARI",
+                      "low risk ARI","high risk ARI","ARI achieved")
+  
+  return(results)
+}
+
+##########################################################################
+## Function to get ARIs and run entire simulation with those parameters ##
+##########################################################################
+runAllSim <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100,
+                      mix=T,low.prev=0.8,TB.prog=c(0.04,0.02,0.01),
+                      ari.seek.min=0.0001,ari.seek.max=0.07,
+                      prevs=seq(100,1000,100),
+                      pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
+                      median.age=c(2,7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87)){
+  
+
+  # First get ARI that will be appropriate for this #
+  ## only necessary if mix=T                       ##
+  ###################################################
+  overall.ARIs <- NULL
+  if(mix==T){
+    ARI.seek <- runSweep(ari.goal=ari.goal,mix=T,low.prev=low.prev,TB.prog=TB.prog,
+                         ari.seek.min=0.0001,ari.seek.max=0.07,
+                         prevs=prevs)
+    # output is: c("Prev(per100k)","Correct Prev","overall ARI",
+    #     "low risk ARI","high risk ARI","ARI achieved")
+    overall.ARIs <- ARI.seek[,3] #actual ARIs
+    ari.goal <- overall.ARIs/100
+  }
+
+  results.sim <- list()
+  for(i in 1:length(prevs)){
+    
+    results.sim[[i]] <- runSimulation(ari.overall=ari.goal[i],low.prev=low.prev,
+                                      mix=mix,TB.prog=TB.prog)
+    
+  }
+  
+  return(list(results.sim,overall.ARIs))
+}
 

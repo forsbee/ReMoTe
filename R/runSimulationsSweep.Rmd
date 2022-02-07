@@ -18,7 +18,6 @@ This work reads in two functions which initialize and high and low risk populati
 The second step is to generate new infections over a one year time period and then deterministically creates active cases of disease using prespecified progression rates that are a function of the number of infections an individual has.
 
 ```{r, echo = FALSE, include=FALSE}
-setwd("G:/My Drive/Work/TB Projects/ReMoTe")
 source("./R/utils.R")
 library(ggplot2)
 library(reshape)

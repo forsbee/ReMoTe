@@ -1,0 +1,286 @@
+---
+title: "ReMoTe simulation: No mixing, no Ackley"
+author: ""
+date: "`r format(Sys.time(), '%d %B, %Y, %H:%M')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r, include=FALSE}
+source("./R/utils.R")
+library(ggplot2)
+library(reshape)
+library(reshape2)
+library(RColorBrewer)
+library(ggpubr)
+library(gridExtra)
+library(grid)
+library(scales)
+library(dplyr)
+library(data.table)
+library(xlsx)
+library(kableExtra)
+```
+
+## Background
+
+We initialize a population of size one million using the ARI, and age structure that mimics South Africa. We then generate new case of disease over a one year period and explore the role of reinfection in generating new cases of disease. We simulate populations with prevalence ranging from 100/100k to 1000/100k.
+
+We use the correction in our calculations that true prevalence should be 1.66 times reported to account for smear negative TB.
+
+We explore varying two main parameters:
+1. The risk of progression to disease as a function of the number of infections.
+2. The proportion of the population that is at high risk of infection.
+
+## Parameters used in this simulation
+### Risk of progression to disease
+Following is a depiction of the parameters used for the risk of progression to disease for those with a new infection as a function of the number of total infections.
+
+```{r}
+pars <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Parameters/Pars_2021_11_5.xlsx",sheetName = "No Mixing, No Ackley")
+prevs <- pars[,1]
+low.prev <- pars[1,3]
+ari.goal <- c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100
+pop.age=c(99000, 99000,92000,83000,85000,90000, 91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000)
+median.age=c(2,7,12,17,22,27,32,37,42,47,52,57,62,67,72,77,82,87)
+prog.old.inf=0.00075
+
+max.inf <- 100
+TB.prog<-cbind(pars$Progress1Infection[1],
+              pars$Progression2Inf[1],
+              pars$ProgressionStep[1])
+TB.prog.sim <- c(TB.prog[1],rep(TB.prog[2],max.inf))
+TB.prog.sim[TB.prog.sim>1] <- 1
+```
+
+Here, the risk of progression with one infection is `r TB.prog[1]` and the risk with two infections is `r TB.prog[2]`. After two infections the risk increases by `r TB.prog[3]` with each infection.
+
+```{r}
+plot.dat <- data.frame(num.infections=seq(1,max.inf+1),prog.rate=TB.prog.sim)
+
+ggplot(plot.dat,aes(x=num.infections,y=prog.rate))+
+  geom_line()+
+  labs(x="Number of infections",y="Probability of pregression to disease")
+```
+
+### Proportion of the population at high risk
+
+In this simulation, we assume that `r pars$PopLowRisk[1]` proportion of the population are at low risk of infection.
+
+In summary the parameters for the simulation are:
+
+```{r}
+pars.sim <- pars
+pars.sim %>% kbl(col.names=c("Prev(per100k)","Overall ARI","Population Low Risk","Prob progress with 1 infection",
+                             "Probability with 2 infections","increase per addt'l infection")) %>% kable_styling()
+```
+
+
+## Parameter sweep to determine ARI
+
+We do not need to do a parameter sweep, since there is no mixing in this scenario.
+
+
+## Initializing the population 
+
+We first determine the number of infections that individuals have at the start of the simulation. 
+
+```{r, echo=F}
+# simulate the baseline population
+sim.data <- list()
+for(i in 1:length(pars[,1])){
+  
+  sim.data[[i]] <- init.popn.nomix(ari=pars[i,2]/100)
+}  
+```
+
+```{r, echo=FALSE}
+# first show overall number of infections by prevalence
+# need matrix with prevalence and number of infections, then have this by age group
+num.prev <- length(unique(prevs)); num.age <-length(median.age)
+# data frame for plotting with age,prev,total infections
+num.inf.age <- data.frame(prevalence=rep(prevs,each=num.age+1),
+                             age.group=rep(c(0,median.age),num.prev),
+                             total.infections=rep(NA,num.prev*(num.age+1)))
+
+# data frame with prevalence,number of infections (categorical), count with that number of infections/prev
+num.inf.nomix <-   
+  data.frame(prevalence=rep(prevs,each=10),
+                             num.inf=rep(c(as.character(c(0:8)),"9+"),num.prev),
+                             count=rep(NA,num.prev*10))
+
+# data frame prev of LTBI for each prevalenceTB x age combo
+age.prev.LTBI <- matrix(0,nr=num.age,nc=10)
+
+for(i in 1:10){
+  
+  # total number of infected individuals in each age group by prevalence
+  #########################################################################
+  tmp.inf <- sim.data[[i]]$all.pop
+  tmp.inf <- tmp.inf[,2:ncol(tmp.inf)]
+  ### total.infections: (total  infections, age specific number of infections)
+  num.inf.age$total.infections[((i-1)*(num.age+1)+1):(i*(num.age+1))] <- round(c(sum(tmp.inf),apply(tmp.inf,1,sum)))
+
+  # total number of individuals with 0, 1,...,9+ infections by prevalence
+  ##########################################################################
+  tmp.inf <- sim.data[[i]]$all.pop
+  if(ncol(tmp.inf)<11){
+    tmp <- as.data.frame(cbind(tmp.inf,matrix(rep(0,nrow(tmp.inf)*(11-ncol(tmp.inf))),nr=nrow(tmp.inf))))
+    names(tmp)[(ncol(tmp.inf)+1):11] <- as.character((ncol(tmp.inf)+1):11) 
+    tmp.inf <- tmp
+  }
+  ### compact together all individuals with 9+ infections
+  tmp.inf <- cbind(tmp.inf[,1:9],apply(tmp.inf[,10:ncol(tmp.inf)],1,sum)) 
+  num.inf.nomix$count[((i-1)*10+1):(10*i)] <- round(apply(tmp.inf,2,sum))
+ 
+  # prev of LTBI by age and TB prev
+  ###########################################
+  tmp.inf <- sim.data[[i]]$all.pop
+  tmp.inf <- tmp.inf[,1] #numbers with no infections
+  num.infect.age <- pop.age-tmp.inf
+  age.prev.LTBI[,i] <- round(num.infect.age/pop.age,2)
+
+}
+
+max.inf <- max(num.inf.age$total.infections)
+```
+
+
+### Results of initialized population
+
+
+```{r, echo=F}
+# plot the results for mixing group
+colorCount <- num.age
+getPalette <- colorRampPalette(brewer.pal(9,"Paired"))
+
+ggplot(data=num.inf.age[num.inf.age$age.group==0,],aes(x=prevalence,y=total.infections))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="Total number of infected individuals",x="TB prevalence",y="Total number baseline infections")
+
+ggplot(data=num.inf.age[num.inf.age$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  scale_fill_manual(name="Median age",values=getPalette(colorCount))+
+  theme(legend.position = "bottom")+
+  guides(fill=guide_legend(nrow=2))
+
+ggplot(data=num.inf.nomix,aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+```
+
+We focus in on those with at least six prior infections in this plot.
+```{r, echo=FALSE}
+# just plot those with at least  infections
+ggplot(data=num.inf.nomix[num.inf.nomix$num.inf>5,],aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  labs(title="Distribution of the number of prior infections, at least 6 infections",x="TB prevalence",y="Total number of individuals")+
+  scale_fill_brewer(name="Number of infections",palette="Paired")
+
+```
+
+We show the prevalence of LTBI by age and TB disease prevalence. This can be compared to the Dodd et al data.
+
+```{r,echo=F}
+row.names(age.prev.LTBI) <- c("0-4","5-9","10-14","15-19","20-24","25-29","30-34","35-39","40-44","45-49","50-54","55-59","60-64","65-69","70-74","75-79","80-84","85+")
+
+age.prev.LTBI %>% kbl(col.names = c("Prev100","Prev200","Prev300","Prev400","Prev500","Prev600","Prev700","Prev800","Prev900","Prev1000"),
+                            caption="Prevalence of LTBI by age and TB prevalence") %>% kable_styling()
+```
+
+
+## New cases generated over one year
+
+We now generate cases over a one year period. All infected individuals with no reinfection in this year have a `r prog.old.inf` probability of progressing to active disease. Individuals with a first infection have a `r TB.prog[1]` probability of progressing. Those with a new re-infection follow the probability of progressing determined by Ackley, which increases linearly from `r TB.prog[2]` by a step of `r TB.prog[3]` until it reaches 1. 
+
+```{r,echo=F}
+
+# simulate populations for each set of parameters and then get the basic summary statistics (not age specific)
+## run the no mixing scenarios ## 
+#################################
+res.print <- matrix(0,nr=nrow(pars),ncol=9)
+for(i in 1:nrow(pars)){
+  pars.tmp <- pars[i,]
+  
+  if(is.na(pars[i,1])){break}
+  
+  # simulate the initial population
+  sim.dat.tmp <- sim.data[[i]]
+  
+  # generate new cases
+  max.inf <- ncol(sim.dat.tmp$all.pop)-1
+  
+    if(TB.prog[3]>0){
+    TB.prog.sim <- c(TB.prog[1],seq(TB.prog[2],TB.prog[2]+TB.prog[3]*(max.inf-1),TB.prog[3]))
+    TB.prog.sim[TB.prog.sim>1] <- 1
+    }else{
+      TB.prog.sim <- c(TB.prog[1],rep(TB.prog[2],max.inf))
+      TB.prog.sim[TB.prog.sim>1] <- 1
+    }
+
+  run.cases <- TB.sim.nomix(init.pop=sim.dat.tmp,TB.prog=TB.prog.sim,ari=pars[i,2]/100,prog.old.inf)
+
+  ## get summary stats
+  results.tmp <- sum.stats(run.cases,prevs[i],mix=F)
+
+  res.print[i,] <- as.numeric(c(results.tmp$totals[,1],results.tmp$true.prev,results.tmp$incidence,results.tmp$duration,results.tmp$Rt.inf,results.tmp$Rt.dis))
+
+}
+
+colnames(res.print) <- c("ATB from old infections",
+                              "Total ATB","percent first inf","percent old inf", "corrected prevalence","incidence (per 100,000)","duration","Rt infections","Rt disease")
+```
+
+We can calculate the following statistics:
+
+- Cases from old infection (all in high risk)
+- Total cases
+- percent cases from first infection
+- percent cases from old infection
+- Corrected prevalence (=1.66*smear positive prevalence) 
+- Incidence (per 100000)
+- Implied duration (=prev/Inc)
+- Reproductive number for infection (= #new infections/corrected prevalence)
+- Reproductive number for disease (= #ATB from new infections/corrected prevalence)
+
+We also look at:
+
+- Uninfected individuals at start of simulation
+- Number infected during one year
+- Observed ARI
+
+```{r,echo=F}
+  res.print %>% kbl() %>% kable_styling()
+```
+
+### Plotting the results
+We show the number of TB disease cases by prevalence and source (old infection, new primary infection, re-infection).
+
+```{r,echo=FALSE}
+print.nomix <- data.frame(prevalence=rep(prevs,3),
+                             source=rep(c("Old infection","New infection","Reinfection"),each=10),
+                             count=rep(NA,30))
+
+print.nomix$count <- c(res.print[,1],res.print[,3]*res.print[,2],
+                              (1-(res.print[,3]+res.print[,4]))*res.print[,2])
+
+max.count <- max(sum(print.nomix$count[print.nomix$prevalence==1000]))
+
+# create bar plots
+ggplot(data=print.nomix,aes(x=prevalence,y=count,fill=source))+
+  geom_bar(stat="identity")+ylim(c(0,2100))+
+  labs(title="Number of new cases",x="TB prevalence",y="Number of cases")+
+  scale_fill_brewer(name="Source of cases",palette="Paired")
+
+# save data for plotting
+save(num.inf.age,num.inf.nomix,print.nomix,file="./Output/noMix_noackley_plotData.RData")
+```
+
+
+
