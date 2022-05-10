@@ -3,7 +3,6 @@
 # 1. initialize population                        #
 # 2. generate infections and disease in one year  #
 ###################################################
-# 7/27/21 this updates v2 of this code to have init.popn for mixing and no mixing populations
 library(ggplot2)
 library(reshape)
 library(reshape2)
@@ -441,7 +440,7 @@ sum.stats <- function(results.all,pars.tmp,mix=T){
 # function to run the overall simulation for input overall ari #
 ################################################################
 runSimulation <- function(ari.overall,low.prev=0.8,
-                          mix=T,
+                          mix=T,ARI.rat=6,
               TB.prog=c(0.04,0.02,0.01),
               prog.old.inf=0.00075,
               pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
@@ -450,8 +449,8 @@ runSimulation <- function(ari.overall,low.prev=0.8,
   
   if(mix==T){
     # first calculate the ARI for high and low risk populations
-    ari.low.tmp <- ari.overall/(low.prev+(1-low.prev)*6)
-    ari.high.tmp <- 6*ari.low.tmp
+    ari.low.tmp <- ari.overall/(low.prev+(1-low.prev)*ARI.rat)
+    ari.high.tmp <- ARI.rat*ari.low.tmp
   
     # initialize population
      sim.popn <- init.popn.mix(ari.high=ari.high.tmp,
@@ -518,6 +517,7 @@ runSimulation <- function(ari.overall,low.prev=0.8,
 ## RUN THE PARAMETER SWEEP WITH TARGET PARAMETERS
 ###########################################################
 runSweep <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100,
+                     ARI.rat=6,
                      mix=T,low.prev=0.8,TB.prog=c(0.04,0.02,0.01),
                      ari.seek.min=0.0001,ari.seek.max=0.07,
                      prevs=seq(100,1000,100)){
@@ -529,7 +529,7 @@ runSweep <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100
     
     if(mix==T){
     tmp <- runSimulation(ari.overall=aris[i],low.prev=low.prev,
-                         mix=T,
+                         mix=T,ARI.rat=ARI.rat,
                          TB.prog=TB.prog,
                          prog.old.inf=0.00075,
                          pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
@@ -560,8 +560,8 @@ runSweep <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100
     ari.achieved[i] <- aris.obs[index]*100
     
     if(mix==T){
-      ARI.low[i] <- ARI.overall[i]/(low.prev+(1-low.prev)*6)
-      ARI.high[i] <- 6*ARI.low[i]
+      ARI.low[i] <- ARI.overall[i]/(low.prev+(1-low.prev)*ARI.rat)
+      ARI.high[i] <- ARI.rat*ARI.low[i]
     }
 
   }
@@ -580,6 +580,7 @@ runSweep <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100
 ##########################################################################
 runAllSim <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100,
                       mix=T,low.prev=0.8,TB.prog=c(0.04,0.02,0.01),
+                      ARI.rat=6,
                       ari.seek.min=0.0001,ari.seek.max=0.07,
                       prevs=seq(100,1000,100),
                       pop.age=c(99000, 99000,92000,83000,85000,90000,91000,79000,63000,54000,44000,37000,30000, 23000,15000,10000,5000,1000),
@@ -592,7 +593,7 @@ runAllSim <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/10
   overall.ARIs <- NULL
   if(mix==T){
     ARI.seek <- runSweep(ari.goal=ari.goal,mix=T,low.prev=low.prev,TB.prog=TB.prog,
-                         ari.seek.min=0.0001,ari.seek.max=0.07,
+                         ari.seek.min=0.0001,ari.seek.max=0.07,ARI.rat=ARI.rat,
                          prevs=prevs)
     # output is: c("Prev(per100k)","Correct Prev","overall ARI",
     #     "low risk ARI","high risk ARI","ARI achieved")
@@ -604,6 +605,7 @@ runAllSim <- function(ari.goal=c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/10
   for(i in 1:length(prevs)){
     
     results.sim[[i]] <- runSimulation(ari.overall=ari.goal[i],low.prev=low.prev,
+                                      ARI.rat=ARI.rat,
                                       mix=mix,TB.prog=TB.prog)
     
   }

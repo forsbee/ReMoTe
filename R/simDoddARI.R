@@ -1,10 +1,10 @@
 # Simulated heterogeneous risk with Dodd ARIs #
 ###############################################
-source("./R/utils.R")
+source("./utils.R")
 
 library(xlsx)
 
-pars <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Parameters/Pars_2021_11_5.xlsx",sheetName = "Mixing and Ackley")
+pars <- read.xlsx("../Parameters/Pars_2021_11_5.xlsx",sheetName = "Mixing and Ackley")
 prevs <- pars[,1]
 low.prev <- pars[1,3]
 ari.goal <- c(0.9,1.27,1.63,2,2.36,2.72,3.1,3.46,3.83,4.2)/100
@@ -50,4 +50,4 @@ for(i in 1:10){
 }
 
 save(num.inf.age,num.inf.mix,
-     file="./Output/Mix_DoddARI_plotData.RData")
+     file="../Output/Mix_DoddARI_plotData.RData")

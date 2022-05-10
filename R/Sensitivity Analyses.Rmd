@@ -1,6 +1,19 @@
-# run sensitivity analyses and plot the results #
-#################################################
-source("./utils.R")
+---
+title: "ReMoTe Sensitivity Analyses"
+author: "Laura White"
+date: "`r format(Sys.time(), '%d %B, %Y, %H:%M')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Sensitivity analyses {.tabset}
+Here we run the ReMoTe model. We first vary the proportion of the population at high risk of TB exposure and the probability of TB disease progression. In the latter, we consider one scenario with constant protection from progression (non-Ackley) and four scenarios with protection where we vary either the probability of progression with one infection or the rate that protection wanes with subsequent infection. Finally we consider the scenario where the difference between the ARI in the high and low risk groups varies between 4 and 8 (the main results have this set to 6).
+
+```{r, include=F}
+source('./utils.R')
 
 prevs <- seq(100,1000,100)
 
@@ -18,6 +31,14 @@ low.prev.all <- seq(0.6,0.95,0.05)
 # ARI ratio
 ari.rat <- seq(4,8,1)
 
+```
+
+
+### Results: changing proportion at low risk
+
+We vary the proportion at low risk of infection between 0.7 0.8, and 0.9. Following are results demonstrating the change in ARI and incidence for the 10 prevelance scenarios. These assume that TB progression rates are 0.05 for the first infection, drop to 0.02 for the second and increase by 0.01 for each subsequent infection.
+
+```{r}
 # low prevalence simulations-vary proportion at low risk of exposure #
 ######################################################################
 low.prev.res <- list()
@@ -55,6 +76,11 @@ ggplot(plot.dat,aes(x=Prevalence,y=incidence,color=low.prev))+geom_point()+
 ggplot(plot.dat,aes(x=Prevalence,y=ari,color=low.prev))+geom_point()+
   labs(x="Prevalence",y="Actual ARI")+scale_color_continuous(name="Proportion\n Low Risk")
 
+```
+
+### Results: changing the risk of TB disease assumption
+
+```{r}
 ## Change in risk of TB disease assumptions 
 #############################################
 incidences <- matrix(0,nr=length(TB.prog.all[,1]),ncol=length(prevs))
@@ -82,6 +108,13 @@ ggplot(plot.dat.4,aes(x=Prevalence,y=incidence,shape=as.factor(Ackley),color=as.
   geom_point()+
   labs(y="Incidence",color="Progression rate",shape="Waning protection")
 
+```
+
+### Results: changing ratio between high and low risk ARI
+
+We vary the ratio between ARIs for the high and low risk populations from 4 to 8. In the main analyses, this is assumed to be 6. For these scenarios, we maintain 80% of the population in the low risk group.
+
+```{r}
 # vary ARI.rat #
 ################
 ARI.rat.res <- list()
@@ -110,3 +143,4 @@ ggplot(plot.dat,aes(x=Prevalence,y=incidence,color=ari.rat))+geom_point()+
 # ari versus risk plot
 ggplot(plot.dat,aes(x=Prevalence,y=ari,color=ari.rat))+geom_point()+
   labs(x="Prevalence",y="Actual ARI")+scale_color_continuous(name="ARI ratio")
+```

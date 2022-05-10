@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r, include=FALSE}
-source("./R/utils.R")
+source("./utils.R")
 library(ggplot2)
 library(reshape)
 library(reshape2)
@@ -32,7 +32,7 @@ We initialize a population of size one million using the ARI, and age structure 
 We consider two scenarios: 
 
 1. Homogenous risk of TB infection in the population
-2. Hetergenous risk: 20% of the population has an ARI that is 6 times greater than the low risk population. 
+2. Heterogenous risk: 20% of the population has an ARI that is 6 times greater than the low risk population. 
 
 The ARI is challenging to estimate. We use two approaches:
 
@@ -76,15 +76,15 @@ Following are these parameter assumptions:
 
 ```{r, echo = FALSE}
 # Dodd et al ARI, based on TB prevalence
-pars.mix <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Code/ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "Mixing and Ackley")
+pars.mix <- read.xlsx("../Parameters/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "Mixing and Ackley")
 # get overall value
 ari.overall.mix <- round(pars.mix[1:10,2]*pars.mix[1:10,4]+pars.mix[1:10,3]*pars.mix[1:10,5],2)
 
-pars.nomix <- read.xlsx("G:/My Drive/Work/TB Projects/ReMoTe local/Code/ParameterInputs/New Baseline parameters for model_fixed HR_9.16.21 standard.xlsx",sheetName = "No Mixing, Ackley")
+pars.nomix <- read.xlsx("../Parameters/Pars_2021_11_5.xlsx",sheetName = "No Mixing, Ackley")
 # 10/12/21: do not use this-just use overall ARI for mixing scenarios
 
 # par sweep parameters
-pars.sweep <- read.csv("G:/My Drive/Work/TB Projects/ReMoTe/Parameters/parSweepAll_2yr.csv")
+pars.sweep <- read.csv("../Parameters/parSweepAll_2yr.csv")
 
 pars.print <- data.frame(cbind(pars.mix[1:10,1:3],ari.overall.mix,ari.overall.mix,
                                pars.sweep[,c(8,9,7,5)]))

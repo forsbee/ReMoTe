@@ -1,31 +1,31 @@
 # file to generate figures for the paper #
 ##########################################
-source("./R/utils.R")
+source("./utils.R")
 
 num.age <- 18
 
-# homogeneous risk; no protection
-load("./Output/noMix_noackley_plotData.RData")
+# homogeneous risk; protection
+load("../Output/noMix_noackley_plotData.RData")
 baseline.age.nomix <- num.inf.age
 baseline.numinf.nomix <- num.inf.nomix
-output.nomix.noprot <- print.nomix
-
-# homogeneous risk; protection
-load("./Output/noMix_ackley_plotData.RData")
 output.nomix.prot <- print.nomix
 
-# heterogeneous risk; no protection
-load("./Output/Mix_noackley_plotData.RData")
-baseline.age.mix <- num.inf.age
-baseline.numinf.mix <- num.inf.mix
-output.mix.noprot <- print.mix
+# homogeneous risk; no protection
+load("../Output/noMix_ackley_plotData.RData")
+output.nomix.noprot <- print.nomix
 
 # heterogeneous risk; protection
-load("./Output/Mix_ackley_plotData.RData")
+load("../Output/Mix_noackley_plotData.RData")
+baseline.age.mix <- num.inf.age
+baseline.numinf.mix <- num.inf.mix
 output.mix.prot <- print.mix
 
+# heterogeneous risk; no protection
+load("../Output/Mix_ackley_plotData.RData")
+output.mix.noprot <- print.mix
+
 # heterogeneous risk; unadjust ARI
-load("./Output/Mix_DoddARI_plotData.RData")
+load("../Output/Mix_DoddARI_plotData.RData")
 baseline.age.mix.DoddARI <- num.inf.age
 baseline.numinf.mix.DoddARI <- num.inf.mix
 
@@ -87,7 +87,7 @@ ggplot(data=baseline.numinf.mix,aes(x=prevalence,y=count,fill=num.inf))+
 # Figure 4: Cases of TB generated over 1 year
 #################################################
 ## A) without mixing, no protection from progression, increasing risk
-max.count <- max(sum(output.mix.prot$count[output.mix.prot$prevalence==1000]))
+max.count <- max(sum(output.mix.noprot$count[output.mix.noprot$prevalence==1000]))
 ggplot(data=output.nomix.noprot,aes(x=prevalence,y=count,fill=source))+
   geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="Number of new cases",x="TB prevalence (per 100000)",y="Number of cases")+
