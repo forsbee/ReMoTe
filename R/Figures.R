@@ -37,7 +37,7 @@ colorCount <- num.age
 getPalette <- colorRampPalette(brewer.pal(9,"Paired"))
 ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence (per 100000)",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
@@ -45,7 +45,7 @@ ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(pre
 ## B) number of prior infections by prevalence
 ggplot(data=baseline.numinf.nomix,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
-  labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
+  labs(title="Distribution of the number of prior infections",x="TB prevalence (per 100000)",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
 
 # Figure 2: heterogeneous baseline conditions, unadjusted ARI
@@ -56,7 +56,7 @@ baseline.numinf.mix.DoddARI <- num.inf.mix
 max.inf <- max(baseline.age.mix.DoddARI$total.infections)
 ggplot(data=baseline.age.mix.DoddARI[baseline.age.mix.DoddARI$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence (per 100000)",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
@@ -64,7 +64,7 @@ ggplot(data=baseline.age.mix.DoddARI[baseline.age.mix.DoddARI$age.group!=0,],aes
 ## B) number of prior infections by prevalence
 ggplot(data=baseline.numinf.mix.DoddARI,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
-  labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
+  labs(title="Distribution of the number of prior infections",x="TB prevalence (per 100000)",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
 
 # Figure 3: heterogeneous baseline population with adjusted ARI
@@ -73,7 +73,7 @@ ggplot(data=baseline.numinf.mix.DoddARI,aes(x=prevalence,y=count,fill=num.inf))+
 max.inf <- max(baseline.age.mix$total.infections)
 ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence",y="Total number baseline infections")+
+  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence (per 100000)",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
@@ -81,32 +81,31 @@ ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(pre
 ## B) number of prior infections by prevalence
 ggplot(data=baseline.numinf.mix,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
-  labs(title="Distribution of the number of prior infections",x="TB prevalence",y="Total number of individuals")+
+  labs(title="Distribution of the number of prior infections",x="TB prevalence (per 100000)",y="Total number of individuals")+
   scale_fill_brewer(name="Number of infections",palette="Paired")
 
 # Figure 4: Cases of TB generated over 1 year
 #################################################
 ## A) without mixing, no protection from progression, increasing risk
+max.count <- max(sum(output.mix.prot$count[output.mix.prot$prevalence==1000]))
 ggplot(data=output.nomix.noprot,aes(x=prevalence,y=count,fill=source))+
-  geom_bar(stat="identity")+ylim(c(0,2100))+
-  labs(title="Number of new cases",x="TB prevalence",y="Number of cases")+
+  geom_bar(stat="identity")+ylim(c(0,max.count))+
+  labs(title="Number of new cases",x="TB prevalence (per 100000)",y="Number of cases")+
   scale_fill_brewer(name="Source of cases",palette="Paired")
 
 ## B) without mixing, protection against progression, increasing risk with infections
 ggplot(data=output.nomix.prot,aes(x=prevalence,y=count,fill=source))+
-  geom_bar(stat="identity")+ylim(c(0,2100))+
+  geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="Number of new cases",x="TB prevalence",y="Number of cases")+
   scale_fill_brewer(name="Source of cases",palette="Paired")
 
 ## C) mixing, adjusted ARI, no protection against progression and increasing risk
-max.count <- max(sum(output.mix.noprot$count[output.mix.noprot$prevalence==1000]))
 ggplot(data=output.mix.noprot,aes(x=prevalence,y=count,fill=source))+
   geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="Number of new cases",x="TB prevalence",y="Number of cases")+
   scale_fill_brewer(name="Source of cases",palette="Paired")
 
 ## D) mixing, adjusted ARI, protection against progression and increasing risk
-max.count <- max(sum(output.mix.prot$count[output.mix.prot$prevalence==1000]))
 ggplot(data=output.mix.prot,aes(x=prevalence,y=count,fill=source))+
   geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="Number of new cases",x="TB prevalence",y="Number of cases")+
