@@ -29,7 +29,7 @@ TB.prog.all <- rbind(TB.prog1,TB.prog2,TB.prog3,TB.prog4,TB.prog5)
 low.prev.all <- seq(0.6,0.95,0.05)
 
 # ARI ratio
-ari.rat <- seq(4,9,1)
+ari.rat <- seq(4,8,1)
 
 ```
 
