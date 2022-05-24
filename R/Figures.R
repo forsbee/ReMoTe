@@ -2,6 +2,9 @@
 ##########################################
 source("./utils.R")
 
+library(ggpubr)
+library(cowplot)
+
 num.age <- 18
 
 # homogeneous risk; protection
@@ -35,18 +38,21 @@ baseline.numinf.mix.DoddARI <- num.inf.mix
 max.inf <- max(baseline.age.mix$total.infections)
 colorCount <- num.age
 getPalette <- colorRampPalette(brewer.pal(9,"Paired"))
-ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+
+fig1a <- ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence (per 100000)",y="Total infected at baseline")+
+  labs(title="(a)",x="TB prevalence (per 100000)",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
 
 ## B) number of prior infections by prevalence
-ggplot(data=baseline.numinf.nomix,aes(x=prevalence,y=count,fill=num.inf))+
+fig1b <- ggplot(data=baseline.numinf.nomix,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
-  labs(title="Distribution of the number of prior infections",x="TB prevalence (per 100000)",y="Total number of individuals")+
-  scale_fill_brewer(name="Number of infections",palette="Paired")
+  labs(title="(b)",x="TB prevalence (per 100000)",y="Total number of individuals")+
+  scale_fill_brewer(name="Number\nof\ninfections",palette="Paired")
+
+ggarrange(fig1a,fig1b,nrow=2,ncol=2)
 
 # Figure 2: heterogeneous baseline conditions, unadjusted ARI
 ###############################################################
@@ -54,35 +60,71 @@ baseline.age.mix.DoddARI <- num.inf.age
 baseline.numinf.mix.DoddARI <- num.inf.mix
 ## A) infected individuals by age and prevalence
 max.inf <- max(baseline.age.mix.DoddARI$total.infections)
-ggplot(data=baseline.age.mix.DoddARI[baseline.age.mix.DoddARI$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+fig2a <- ggplot(data=baseline.age.mix.DoddARI[baseline.age.mix.DoddARI$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence (per 100000)",y="Total infected at baseline")+
+  labs(title="(a)",x="TB prevalence (per 100000)",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
 
+fig2a <- ggplot(data=baseline.age.mix.DoddARI[baseline.age.mix.DoddARI$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="",x="TB prevalence (per 100000)",y="Total infected at baseline")+
+  scale_fill_manual(name="Median age",values=getPalette(colorCount))
+
+
 ## B) number of prior infections by prevalence
-ggplot(data=baseline.numinf.mix.DoddARI,aes(x=prevalence,y=count,fill=num.inf))+
+fig2b <- ggplot(data=baseline.numinf.mix.DoddARI,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
-  labs(title="Distribution of the number of prior infections",x="TB prevalence (per 100000)",y="Total number of individuals")+
-  scale_fill_brewer(name="Number of infections",palette="Paired")
+  labs(title="",x="TB prevalence (per 100000)",y="Total number of individuals")+
+  scale_fill_brewer(name="Number\nof\ninfections",palette="Paired")
+
 
 # Figure 3: heterogeneous baseline population with adjusted ARI
 #################################################################
 ## A) infected individuals by age and prevalence
 max.inf <- max(baseline.age.mix$total.infections)
-ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+fig3a <- ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
-  labs(title="Total number of infected individuals by age and prevalence",x="TB prevalence (per 100000)",y="Total infected at baseline")+
+  labs(title="",x="TB prevalence (per 100000)",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
   theme(legend.position = "bottom")+
   guides(fill=guide_legend(nrow=2))
 
+fig3a <- ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.factor(prevalence),y=total.infections,fill=as.factor(age.group)))+
+  geom_bar(stat="identity")+ylim(0,max.inf+500)+
+  labs(title="",x="TB prevalence (per 100000)",y="Total infected at baseline")+
+  scale_fill_manual(name="Median\nage",values=getPalette(colorCount))
+
+legend1 <- get_legend(fig3a)
+  
 ## B) number of prior infections by prevalence
-ggplot(data=baseline.numinf.mix,aes(x=prevalence,y=count,fill=num.inf))+
+fig3b <- ggplot(data=baseline.numinf.mix,aes(x=prevalence,y=count,fill=num.inf))+
   geom_bar(stat="identity")+
-  labs(title="Distribution of the number of prior infections",x="TB prevalence (per 100000)",y="Total number of individuals")+
-  scale_fill_brewer(name="Number of infections",palette="Paired")
+  labs(title="(d)",x="TB prevalence (per 100000)",y="Total number of individuals")+
+  scale_fill_brewer(name="Number\nof\ninfections",palette="Paired")
+
+prow <- ggdraw(
+  plot_grid(
+    plot_grid(fig2a + theme(legend.position="none") ,
+              fig3a +theme(legend.position="none"),
+              align = 'vh',
+              
+              labels = c("a", "b"),
+              
+              hjust = -1,
+              
+              nrow = 1,
+              axis="1"),
+    # as suggested by aosmith you can add additional columns to make legends appear closer
+    plot_grid(legend1,ncol=1),
+    # I also set the relative widths so the legend takes up less space
+    nrow=1, 
+    rel_widths = c(5,1)
+    )
+)
+
+prow
 
 # Figure 4: Cases of TB generated over 1 year
 #################################################

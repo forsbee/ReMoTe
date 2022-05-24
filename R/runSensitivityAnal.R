@@ -18,6 +18,9 @@ low.prev.all <- seq(0.6,0.95,0.05)
 # ARI ratio
 ari.rat <- seq(4,8,1)
 
+# protection from first infection (main analysis uses 60%)
+protection <- c(0.4,0.6,0.8)
+TB.prog.prot <- cbind(rep(0.05,3),0.02,c(0.01,0.1,0.05))
 
 # low prevalence simulations-vary proportion at low risk of exposure #
 ######################################################################
@@ -32,6 +35,21 @@ TB.prog.res <- list()
 for(i in 1:length(TB.prog.all[,1])){
   TB.prog.res[[i]] <- runAllSim(TB.prog=TB.prog.all[i,],low.prev=0.8,mix=T)
 }
+
+# vary ARI.rat #
+################
+ARI.rat.res <- list()
+for(i in 1:length(ari.rat)){
+  ARI.rat.res[[i]] <- runAllSim(ARI.rat=ari.rat[i],mix=T)
+}
+
+# vary protection from prior infection #
+########################################
+TB.prot.res <- list()
+for(i in 1:length(TB.prog.prot[,1])){
+  TB.prot.res[[i]] <- runAllSim(TB.prog=TB.prog.prot[i,],low.prev=0.8,mix=T)
+}
+
 
 # CREATE PLOTS OF RESULTS #
 ###########################
@@ -83,17 +101,8 @@ ggplot(plot.dat.4,aes(x=Prevalence,y=incidence,shape=as.factor(Ackley),color=as.
   geom_point()+
   labs(y="Incidence",color="Progression rate",shape="Waning protection")
 
-# vary ARI.rat #
-################
-ARI.rat.res <- list()
-for(i in 1:length(ari.rat)){
-  ARI.rat.res[[i]] <- runAllSim(ARI.rat=ari.rat[i],mix=T)
-}
-
-# CREATE PLOTS OF RESULTS #
-###########################
-# change in low prev and incidence
-######################################
+# change in ARI ratio between low/high
+#########################################
 incidences <- matrix(0,nr=length(ari.rat),ncol=length(prevs))
 aris <- matrix(0,nr=length(ari.rat),ncol=length(prevs))
 for(i in 1:length(ari.rat)){
@@ -101,13 +110,33 @@ for(i in 1:length(ari.rat)){
   aris[i,] <- ARI.rat.res[[i]][[2]]
 }
 
-plot.dat <- data.frame(ari.rat=rep(ari.rat,10),Prevalence=rep(prevs,each=length(ari.rat)),
+plot.dat.ari <- data.frame(ari.rat=rep(ari.rat,10),Prevalence=rep(prevs,each=length(ari.rat)),
                        ari=c(aris),incidence=c(incidences))
 
 # incidence versus risk plot
-ggplot(plot.dat,aes(x=Prevalence,y=incidence,color=ari.rat))+geom_point()+
+ggplot(plot.dat.ari,aes(x=Prevalence,y=incidence,color=ari.rat))+geom_point()+
   labs(x="Prevalence",y="Observed incidence")+scale_color_continuous(name="ARI ratio")
 
 # ari versus risk plot
-ggplot(plot.dat,aes(x=Prevalence,y=ari,color=ari.rat))+geom_point()+
+ggplot(plot.dat.ari,aes(x=Prevalence,y=ari,color=ari.rat))+geom_point()+
   labs(x="Prevalence",y="Actual ARI")+scale_color_continuous(name="ARI ratio")
+
+# change in protection from prior infection
+#############################################
+incidences <- matrix(0,nr=length(TB.prog.prot[,1]),ncol=length(prevs))
+aris <- matrix(0,nr=length(TB.prog.prot[,1]),ncol=length(prevs))
+for(i in 1:length(TB.prog.prot[,1])){
+  incidences[i,] <- matrix(unlist(TB.prot.res[[i]][[1]]),ncol=10)[1,]
+  aris[i,] <- TB.prot.res[[i]][[2]]
+}
+
+plot.dat.prot <- data.frame(protection=rep(protection,10),Prevalence=rep(prevs,each=length(TB.prog.prot[,1])),
+                           ari=c(aris),incidence=c(incidences))
+
+# incidence versus risk plot
+ggplot(plot.dat.prot,aes(x=Prevalence,y=incidence,color=protection))+geom_point()+
+  labs(x="Prevalence",y="Observed incidence")+scale_color_continuous(name="Protection\nfrom first\ninfection")
+
+# ari versus risk plot-there is no impact on ARI from this.
+ggplot(plot.dat.prot,aes(x=Prevalence,y=ari,color=protection))+geom_point()+
+  labs(x="Prevalence",y="Actual ARI")+scale_color_continuous(name="Protection\nfrom first\ninfection")
