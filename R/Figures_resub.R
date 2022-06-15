@@ -4,6 +4,7 @@ source("./utils.R")
 
 library(ggpubr)
 library(cowplot)
+library(stringr)
 
 num.age <- 18
 
@@ -45,7 +46,7 @@ fig1a <- ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=as.f
   guides(fill=guide_legend(ncol=2))+
   labs(title="",x="",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
-  theme(axis.text.y=element_text(angle=90))+ 
+  theme(axis.text.y=element_text(angle=90,hjust=0.55))+ 
   scale_x_discrete(labels=c("100","","","","500","","","","","1000"))
 
 legend.age <- get_legend(fig1a)
@@ -72,7 +73,7 @@ fig1c.alt <- ggplot(data=baseline.age.mix[baseline.age.mix$age.group!=0,],aes(x=
   geom_bar(stat="identity")+ylim(0,max.inf+500)+
   labs(title="",x="",y="Total infected at baseline")+
   scale_fill_manual(name="Median age",values=getPalette(colorCount))+
-  theme(axis.text.y=element_text(angle=90))+ 
+  theme(axis.text.y=element_text(angle=90,hjust=0.55))+ 
   scale_x_discrete(labels=c("100","","","","500","","","","","1000"))
 
 ## put these three figures in one plot ##
@@ -107,6 +108,15 @@ fig1d <- ggplot(data=baseline.numinf.nomix,aes(x=prevalence,y=count,fill=num.inf
   theme(axis.text.y=element_text(angle=90))+ 
   scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))
 
+fig1d <- ggplot(data=baseline.numinf.nomix,aes(x=prevalence,y=count,fill=num.inf))+
+  geom_bar(stat="identity")+
+  guides(fill=guide_legend(ncol=2))+
+  labs(title="",x="",y="Total number of individuals")+
+  scale_fill_brewer(name="Number\nof\ninfections",palette="Paired")+
+  theme(axis.text.y=element_text(angle=90,hjust=0.55))+ 
+  scale_y_continuous(breaks=c(0,300000,600000,900000))+
+  scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))
+
 legend2 <- get_legend(fig1d)
 
 ## E) heterogeneous mixing, unadjusted ARI
@@ -131,7 +141,8 @@ fig1f.alt <- ggplot(data=baseline.numinf.mix,aes(x=prevalence,y=count,fill=num.i
   geom_bar(stat="identity")+
   labs(title="",x="",y="Total number of individuals")+
   scale_fill_brewer(name="Number\nof\ninfections",palette="Paired")+
-  theme(axis.text.y=element_text(angle=90))+ 
+  theme(axis.text.y=element_text(angle=90,hjust=0.55))+ 
+  scale_y_continuous(breaks=c(0,300000,600000,900000))+
   scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))
 
 prow <- ggdraw(
@@ -187,12 +198,14 @@ fig2a <- ggplot(data=output.nomix.prot,aes(x=prevalence,y=count,fill=source))+
   geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="",x="",y="")+
   scale_fill_brewer(name="Source of cases",palette="Paired")+ 
-  scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))
+  scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))+
+  theme(axis.text.y=element_text(angle=90,hjust=0.55))
 
 ## B) without mixing, no protection from progression, increasing risk
 fig2b <- ggplot(data=output.nomix.noprot,aes(x=prevalence,y=count,fill=source))+
   geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="",x="",y="")+
+  theme(axis.text.y=element_blank())+ 
   scale_fill_brewer(name="Source of\ncases",palette="Paired")+ 
   scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))
 
@@ -203,12 +216,14 @@ fig2c <- ggplot(data=output.mix.prot,aes(x=prevalence,y=count,fill=source))+
   geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="",x="",y="")+
   scale_fill_brewer(name="Source of cases",palette="Paired")+ 
-  scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))
+  scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))+
+  theme(axis.text.y=element_text(angle=90,hjust=0.55))
 
 ## D) mixing, adjusted ARI, no protection against progression and increasing risk
 fig2d <- ggplot(data=output.mix.noprot,aes(x=prevalence,y=count,fill=source))+
   geom_bar(stat="identity")+ylim(c(0,max.count))+
   labs(title="",x="",y="")+
+  theme(axis.text.y=element_blank())+ 
   scale_fill_brewer(name="Source of cases",palette="Paired")+ 
   scale_x_continuous(breaks=c(100,500,1000),labels=c("100","500","1000"))
 
@@ -225,7 +240,7 @@ prow <- ggdraw(
               nrow = 2,
               axis="1"),
     legend.src,
-    rel_widths = c(5,1),rel_heights = c(1,0.5))
+    rel_widths = c(6,1.75),rel_heights = c(1,0.35))
 )
 
 prow+draw_label("TB prevalence (per 100000)",x=0.5,y=0.02)+draw_label("Number of cases",x=0.01,y=0.5,angle=90)
