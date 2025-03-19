@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ## Overview
-This project contains files to run the simulations of the ReMoTe model. This deterministic simulation considers to role of the ARI and potential protection against progression to active disease from reinfection. It is based on a fictitious population on one million individuals with age structure similar to South Africa.
+This project contains files to run the simulations of the ReMoTe model. This deterministic simulation considers to role of the ARI and potential protection against progression to active disease from reinfection. It is based on a synthetic population on one million individuals with age structure similar to South Africa. This work has been published in [`Clinical Infectious Diseases`](https://pubmed.ncbi.nlm.nih.gov/35666515/).
 
 ## Explanation of files
 Following is an explanation of the files in the project:
